@@ -1,4 +1,3 @@
-
 // Discord botunun ana dosyası
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
@@ -184,3 +183,7 @@ client.once('ready', async () => {
 });
 
 client.login(process.env.TOKEN);
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Beklenmeyen hata (unhandledRejection):', reason);
+});
