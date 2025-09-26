@@ -9,8 +9,30 @@ function getUserCommandsEmbed() {
 			{ name: '/cekilis', value: '`/cekilis odul:Ödül sure:10 kazanan:1`\nGelişmiş çekiliş başlatır. Katılım butonludur, süre sonunda kazananlar otomatik seçilir.' },
 			{ name: '/emoji', value: '`/emoji isim:[isim] gorsel:[dosya]`\nSunucuya yeni emoji ekler. Sadece yetkililer kullanabilir.' },
 			{ name: '/prefix', value: '`/prefix`\nSunucu için komut prefixini ayarlayın.' },
-			{ name: 'Gelen/Giden Karşılama', value: 'Sunucuya giren ve çıkan üyeler için otomatik karşılama/güle güle görseli gönderilir.' },
-			{ name: 'Otomatik Log Sistemi', value: 'Bot sunucuya katıldığında otomatik olarak `bot-log` kanalı oluşturur ve tüm logları oraya gönderir.' }
+			{
+				name: 'Gelen/Giden Karşılama',
+				value:
+					'Sunucuya yeni biri katıldığında veya ayrıldığında otomatik olarak karşılama veya güle güle görseli gönderilir.\n' +
+					'**Kullanım:**\n' +
+					'- Sistem otomatik olarak çalışır, ek bir komut yazmanız gerekmez.\n' +
+					'- Karşılama/güle güle mesajı ve görseli, varsayılan olarak ilk metin kanalına gönderilir.\n' +
+					'- Görsel ve mesajlar özelleştirilebilir (geliştiriciye başvurun).\n' +
+					'**Örnek:**\n' +
+					'`[Kullanıcı] sunucuya katıldı! Hoş geldin!`\n' +
+					'`[Kullanıcı] sunucudan ayrıldı! Güle güle!`'
+			},
+			{
+				name: 'Otomatik Log Sistemi',
+				value:
+					'Bot sunucuya katıldığında otomatik olarak `bot-log` adında bir kanal oluşturur ve önemli olayları buraya loglar.\n' +
+					'**Kullanım:**\n' +
+					'- Ekstra bir komut yazmanıza gerek yoktur, sistem otomatik devreye girer.\n' +
+					'- Ban, kick, mute gibi işlemler ve diğer önemli olaylar bu kanala bildirilir.\n' +
+					'- Log kanalını değiştirmek için `/logkanal kanal:#kanal` komutunu kullanabilirsiniz.\n' +
+					'**Örnek:**\n' +
+					'`[Kullanıcı] sunucudan banlandı. Sebep: Spam`\n' +
+					'`[Kullanıcı] susturuldu. Süre: 10dk`'
+			}
 		)
 		.setTimestamp();
 }
