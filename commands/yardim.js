@@ -12,7 +12,6 @@ function getUserCommandsEmbed() {
 			{ name: 'Gelen/Giden Karşılama', value: 'Sunucuya giren ve çıkan üyeler için otomatik karşılama/güle güle görseli gönderilir.' },
 			{ name: 'Otomatik Log Sistemi', value: 'Bot sunucuya katıldığında otomatik olarak `bot-log` kanalı oluşturur ve tüm logları oraya gönderir.' }
 		)
-		.setFooter({ text: 'Butonlarla menüler arasında gezinebilirsin.' })
 		.setTimestamp();
 }
 
@@ -34,7 +33,6 @@ function getModCommandsEmbed() {
 			{ name: '/istatistikkanal', value: '`/istatistikkanal tip:uye/aktif kanalturu:text/voice`\nÜye veya aktif kullanıcı sayısını gösterecek kanal oluşturur.' },
 			{ name: '/prefix', value: '`/prefix`\nSunucu için komut prefixini ayarlayın.' }
 		)
-		.setFooter({ text: 'Butonlarla menüler arasında gezinebilirsin.' })
 		.setTimestamp();
 }
 
