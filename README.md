@@ -16,4 +16,3 @@ Gelişmiş moderasyon özellikli Discord public botu.
 2. `.env` dosyasına bot tokenınızı girin
 3. `npm start` ile başlatın
 
-Geliştirme adımları için Copilot ile ilerleyin.
