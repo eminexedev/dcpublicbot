@@ -19,10 +19,13 @@ module.exports = (client, getPrefix) => {
 		i++;
 	};
 
-	// İlk başta hemen ayarla
-	updateStatus();
-	// Sonra her 10 saniyede bir güncelle
-	setInterval(updateStatus, 10000);
+	//StatusUpdate (30)
+	setInterval(updateStatus, 30000);
+/*
+Discord Ratelimit yememek için
+30 saniye olarak yeniden güncelledim.
+-yunus.
+*/
 
 	console.log(`Bot aktif: ${client.user.tag}`);
 };
