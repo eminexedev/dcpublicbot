@@ -7,8 +7,15 @@ module.exports = {
         .setName('istatistik')
         .setDescription('Botun detaylı istatistiklerini gösterir.'),
     async execute(ctx) {
+        // Prefix veya Slash komut kontrolü
+        if (!ctx.isChatInputCommand && !ctx.message) return;
+
         const client = ctx.client || ctx.message?.client;
         if (!client) return;
+
+        const isPrefix = Boolean(ctx.message);
+        
+        if (isPrefix && ctx.commandName === 'istatistik') return;
 
         // Bot başlangıç zamanını hesapla
         const uptime = process.uptime();
@@ -22,8 +29,12 @@ module.exports = {
         const ram = (used.heapUsed / 1024 / 1024).toFixed(2);
 
         // Ping detayları
-        const wsping = Math.round(client.ws.ping);
-        const apiPing = Date.now() - ctx.createdTimestamp;
+        const wsping = Math.abs(Math.round(client.ws.ping)) || 0;
+        const startTime = Date.now();
+        const botPing = Math.abs(isPrefix ? 
+            startTime - ctx.message.createdTimestamp : 
+            startTime - ctx.createdTimestamp);
+        const apiPing = Math.abs(Math.round(client.ws.ping)) || 0;
 
         const embed = new EmbedBuilder()
             .setColor('#5865F2')
@@ -47,9 +58,9 @@ module.exports = {
                 {
                     name: '📊 Ping Detayları',
                     value: [
-                        `> **Bot Pingi:** ${apiPing}ms`,
+                        `> **Bot Pingi:** ${botPing}ms`,
                         `> **WebSocket Pingi:** ${wsping}ms`,
-                        `> **Veritabanı Pingi:** ${Date.now() - ctx.createdTimestamp}ms`
+                        `> **API Gecikmesi:** ${apiPing}ms`
                     ].join('\n')
                 },
                 {
@@ -66,6 +77,6 @@ module.exports = {
             .setFooter({ text: 'Bot istatistikleri anlık olarak güncellenir.' })
             .setTimestamp();
 
-        await (ctx.reply ? ctx.reply({ embeds: [embed] }) : ctx.message.reply({ embeds: [embed] }));
+        await (isPrefix ? ctx.message.reply({ embeds: [embed] }) : ctx.reply({ embeds: [embed] }));
     }
 };

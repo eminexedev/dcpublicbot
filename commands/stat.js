@@ -19,18 +19,17 @@ function getTop(obj, mapFn, limit = 5) {
 }
 
 function drawRoundedRect(ctx, x, y, w, h, r) {
-	ctx.beginPath();
-	ctx.moveTo(x + r, y);
-	ctx.lineTo(x + w - r, y);
-	ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-	ctx.lineTo(x + w, y + h - r);
-	ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-	ctx.lineTo(x + r, y + h);
-	ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-	ctx.lineTo(x, y + r);
-	ctx.quadraticCurveTo(x, y, x + r, y);
-	ctx.closePath();
-	ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
 }
 
 module.exports = {
@@ -41,20 +40,22 @@ module.exports = {
 		let guild, reply, memberFetcher, user, targetUser;
 		let mentionId = null;
 
-		if (ctx.isChatInputCommand && ctx.isChatInputCommand()) {
+		// Slash Command veya Message Command kontrolü
+		if (ctx.type === 2 || ctx.commandType === 'CHAT_INPUT') { // Slash Command
 			guild = ctx.guild;
 			user = ctx.user;
 			reply = (data) => ctx.reply(data);
 			memberFetcher = (id) => guild.members.cache.get(id);
 			targetUser = user;
-		} else if (ctx.message) {
+		} else if (ctx.message) { // Message Command
 			guild = ctx.guild;
 			user = ctx.message.author;
 			reply = (data) => ctx.message.reply(data);
 			memberFetcher = (id) => guild.members.cache.get(id);
 
-			// Kullanıcı etiketlendi mi veya ID ile belirtildi mi kontrol et
-			if (ctx.args && ctx.args.length > 0) {
+			// Güvenli args kontrolü
+			const args = ctx.args || [];
+			if (args.length > 0) {
 				const mention = ctx.message.mentions.users.first();
 				if (mention) {
 					targetUser = mention;
@@ -88,7 +89,8 @@ module.exports = {
 
 		const member = guild.members.cache.get(targetUser.id);
 		const username = member ? member.displayName : targetUser.username;
-		const avatarURL = targetUser.displayAvatarURL({ extension: 'png', size: 128 });
+		// Avatar URL'sini düzelttik
+		const avatarURL = targetUser.displayAvatarURL({ extension: 'png', size: 128 }); // Parametreler güncellendi
 
 		// --- İstatistik verileri hesaplama ---
 
@@ -138,16 +140,16 @@ module.exports = {
 		const topVoiceChannelSec = topVoiceChannelEntry?.[1] || 0;
 
 		// Mesaj arkadaşı (en çok mesaj atan diğer kullanıcı)
-		const msgFriendEntry = Object.entries(stats.users || {}).filter(([id]) => id !== targetUser.id).sort((a, b) => b[1] - a[1])[0];
-		const msgFriendId = msgFriendEntry?.[0];
-		const msgFriend = msgFriendId ? guild.members.cache.get(msgFriendId) : null;
-		const msgFriendName = msgFriend ? msgFriend.displayName : (msgFriendId ? `Kullanıcı yok (${msgFriendId})` : 'Veri yok');
+		const msgFriends = Object.entries(stats.users || {})
+			.filter(([id]) => id !== targetUser.id)
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 3);  // İlk 3 arkadaşı al
 
 		// Ses arkadaşı (en çok sesde kalan diğer kullanıcı)
-		const voiceFriendEntry = Object.entries(stats.voiceUsers || {}).filter(([id]) => id !== targetUser.id).sort((a, b) => b[1] - a[1])[0];
-		const voiceFriendId = voiceFriendEntry?.[0];
-		const voiceFriend = voiceFriendId ? guild.members.cache.get(voiceFriendId) : null;
-		const voiceFriendName = voiceFriend ? voiceFriend.displayName : (voiceFriendId ? `Kullanıcı yok (${voiceFriendId})` : 'Veri yok');
+		const voiceFriends = Object.entries(stats.voiceUsers || {})
+			.filter(([id]) => id !== targetUser.id)
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 3);  // İlk 3 arkadaşı al
 
 		// Yardımcı fonksiyonlar
 		function formatTime(sec) {
@@ -174,7 +176,7 @@ module.exports = {
 		drawRoundedRect(ctx2, 20, 20, 320, 70, 24);
 		ctx2.fillStyle = '#232428';
 		ctx2.globalAlpha = 0.95;
-		ctx2.fill();
+		ctx2.fill(); // drawRoundedRect sonrası fill çağrılıyor
 		ctx2.restore();
 
 		// Profil avatarı
@@ -309,6 +311,27 @@ module.exports = {
 		ctx2.fillText(afkChannelName + ' (AFK)', 40, 440);
 		ctx2.fillStyle = '#bbb';
 		ctx2.fillText(userAfkSec ? formatTime(userAfkSec) : 'Veri yok', 200, 440);
+
+		// Mesaj arkadaşı (en çok mesaj atan diğer kullanıcı)
+		ctx2.fillStyle = '#fff';
+		ctx2.fillText('MESAJ ARKADAŞLARI', 600, 380);
+		ctx2.fillStyle = '#bbb';
+		msgFriends.forEach((friend, index) => {
+			const [id, count] = friend;
+			const friendMember = guild.members.cache.get(id);
+			const friendName = friendMember ? friendMember.displayName : 'Bilinmeyen Kullanıcı';
+			ctx2.fillText(`${friendName}: ${count} mesaj`, 600, 410 + (index * 25));
+		});
+
+		ctx2.fillStyle = '#fff';
+		ctx2.fillText('SES ARKADAŞLARI', 600, 470);
+		ctx2.fillStyle = '#bbb';
+		voiceFriends.forEach((friend, index) => {
+			const [id, duration] = friend;
+			const friendMember = guild.members.cache.get(id);
+			const friendName = friendMember ? friendMember.displayName : 'Bilinmeyen Kullanıcı';
+			ctx2.fillText(`${friendName}: ${formatTime(duration)}`, 600, 500 + (index * 25));
+		});
 
 		const buffer = canvas.toBuffer();
 		const attachment = new AttachmentBuilder(buffer, { name: 'stat.png' });

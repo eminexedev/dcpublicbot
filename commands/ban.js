@@ -42,6 +42,27 @@ module.exports = {
     member = await guild.members.fetch(user.id).catch(() => null);
     if (!member) return reply({ content: 'Kullanıcı bulunamadı.', ephemeral: true });
     if (!member.bannable) return reply({ content: 'Bu kullanıcı banlanamıyor.', ephemeral: true });
+    // Yetki kontrolleri
+    const botMember = guild.members.cache.get(ctx.client.user.id);
+    if (!botMember.permissions.has(PermissionFlagsBits.BanMembers)) {
+      return reply({ content: 'Botun ban yetkisi yok! \n Lütfen "Üyeleri Yasakla" yetkisini verin.', ephemeral: true });
+    }
+
+    // Komutu kullanan kişinin yetkisini kontrol et
+    const executorMember = guild.members.cache.get(replyUser.id);
+    if (!executorMember.permissions.has(PermissionFlagsBits.BanMembers)) {
+      return reply({ content: 'Ban yetkisine sahip değilsiniz!', ephemeral: true });
+    }
+
+    // Hedef kullanıcının rolünü kontrol et
+    if (member.roles.highest.position >= executorMember.roles.highest.position) {
+      return reply({ content: 'Bu kullanıcıyı banlayamazsınız çünkü rolleri sizden yüksek veya eşit.', ephemeral: true });
+    }
+
+    if (member.roles.highest.position >= botMember.roles.highest.position) {
+      return reply({ content: 'Bu kullanıcıyı banlayamam çünkü rolleri benden yüksek veya eşit.', ephemeral: true });
+    }
+
     try {
       await member.ban({ reason });
       await reply({ content: `${user.tag} başarıyla banlandı. Sebep: ${reason}` });
@@ -54,7 +75,11 @@ module.exports = {
         }
       }
     } catch (err) {
-      await reply({ content: `Ban işlemi sırasında bir hata oluştu: ${err.message || err}`, ephemeral: true });
+      console.error('Ban hatası:', err);
+      await reply({ 
+        content: 'Ban işlemi sırasında bir hata oluştu. Lütfen bot ve kullanıcı yetkilerini kontrol edin.', 
+        ephemeral: true 
+      });
     }
   }
 };
