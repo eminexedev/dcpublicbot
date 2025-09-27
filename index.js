@@ -192,8 +192,13 @@ require('./events/voiceStats')(client);
 
 client.login(process.env.TOKEN);
 
+require('./events/statsTracker')(client);
+
+// process ignore logic & system
+/*
+process.on('uncaughtException', (err) => {
+  console.errkr('Expection handled:', err);
+*/
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Beklenmeyen hata (unhandledRejection):', reason);
 });
-
-require('./events/statsTracker')(client);
