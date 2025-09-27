@@ -1,6 +1,6 @@
 module.exports = (client, getPrefix) => {
 	const statuses = [
-		() => `${client.guilds.cache.reduce((a, g) => a + g.memberCount, 0)} üye ile hizmette!`,
+		() => `Anlık üye sayısı: ${client.guilds.cache.reduce((a, g) => a + g.memberCount, 0)} `,
 		() => 'Sunucuyu',
 		() => {
 			const guild = client.guilds.cache.first();
