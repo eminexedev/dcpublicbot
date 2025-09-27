@@ -46,8 +46,15 @@ async function updateStatsChannels(guild) {
 
 client.on('guildMemberAdd', member => updateStatsChannels(member.guild));
 client.on('guildMemberRemove', member => updateStatsChannels(member.guild));
-client.on('ready', () => {
+client.once('ready', async () => {
+  // Durumları gösteren ready.js'i çağır
+  require('./events/ready')(client, getPrefix);
+
+  // İstatistik kanallarını güncelle
   client.guilds.cache.forEach(guild => updateStatsChannels(guild));
+
+  // Komutları deploy et
+  await deployCommands();
 });
 
 // Prefix tabanlı ve etiketli komutlar için
@@ -136,10 +143,6 @@ const { setupInviteTracking } = require('./events/inviteTracker');
 // Karşılama sistemi eventleri
 const { onMemberJoin, onMemberLeave } = require('./events/memberEvents');
 
-client.once('ready', () => {
-  console.log(`Bot aktif: ${client.user.tag}`);
-});
-
 // Invite tracker başlat
 setupInviteTracking(client);
 
@@ -170,7 +173,6 @@ async function deployCommands() {
       Routes.applicationCommands(process.env.CLIENT_ID),
       { body: commands },
     );
-    console.log('Komutlar başarıyla yüklendi!');
   } catch (error) {
     console.error('Komut deploy hatası:', error);
   }
@@ -178,8 +180,14 @@ async function deployCommands() {
 
 // Bot başlatıldığında komutları deploy et
 client.once('ready', async () => {
+  // Durumları gösteren ready.js'i çağır
+  require('./events/ready')(client, getPrefix);
+
+  // İstatistik kanallarını güncelle
+  client.guilds.cache.forEach(guild => updateStatsChannels(guild));
+
+  // Komutları deploy et
   await deployCommands();
-  console.log(`Bot aktif: ${client.user.tag}`);
 });
 
 client.login(process.env.TOKEN);
