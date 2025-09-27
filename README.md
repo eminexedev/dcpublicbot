@@ -12,7 +12,7 @@ Gelişmiş moderasyon özellikli Discord public botu.
 
 ## Kurulum
 
-1. `npm install` ile bağımlılıkları yükleyin
+1. `pnpm install` ile bağımlılıkları yükleyin
 2. `.env` dosyasına bot tokenınızı girin
-3. `npm start` ile başlatın
+3. `pnpm start` ile başlatın
 
