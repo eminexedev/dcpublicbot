@@ -150,11 +150,8 @@ setupInviteTracking(client);
 client.on('guildMemberAdd', onMemberJoin);
 client.on('guildMemberRemove', onMemberLeave);
 
-
-
 // Komut handler'ı yükle
 require('./commandHandler')(client);
-
 
 // Komutları Discord'a otomatik deploy eden fonksiyon
 async function deployCommands() {
@@ -190,8 +187,13 @@ client.once('ready', async () => {
   await deployCommands();
 });
 
+// Voice stats event handler'ını ekle
+require('./events/voiceStats')(client);
+
 client.login(process.env.TOKEN);
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Beklenmeyen hata (unhandledRejection):', reason);
 });
+
+require('./events/statsTracker')(client);
