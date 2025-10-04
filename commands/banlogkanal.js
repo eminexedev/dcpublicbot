@@ -17,11 +17,34 @@ module.exports = {
   usage: '.banlogkanal #kanal',
   permissions: [PermissionFlagsBits.Administrator],
 
-  async execute(ctx) {
-    const channel = ctx.getChannel('kanal', 0);
-    
+  async execute(interaction, args) {
+    let channel;
+
+    // Slash command kontrolü
+    if (interaction.options) {
+      channel = interaction.options.getChannel('kanal');
+    } 
+    // Prefix command kontrolü
+    else if (args && args[0]) {
+      // Kanal mention'ını parse et
+      const channelId = args[0].replace(/[<#>]/g, '');
+      channel = interaction.guild.channels.cache.get(channelId);
+      
+      if (!channel) {
+        return interaction.reply({
+          content: 'Geçersiz kanal! Bir kanal etiketlemelisin.',
+          ephemeral: true
+        });
+      }
+    } else {
+      return interaction.reply({
+        content: 'Bir kanal belirtmelisin. Kullanım: `/banlogkanal #kanal` veya `.banlogkanal #kanal`',
+        ephemeral: true
+      });
+    }
+
     if (!channel) {
-      return ctx.reply({
+      return interaction.reply({
         content: 'Bir kanal belirtmelisin.',
         ephemeral: true
       });
@@ -29,20 +52,20 @@ module.exports = {
 
     // Kanalın metin kanalı olup olmadığını kontrol et
     if (!channel.isTextBased()) {
-      return ctx.reply({ content: 'Ban log kanalı sadece metin kanalı olabilir.', ephemeral: true });
+      return interaction.reply({ content: 'Ban log kanalı sadece metin kanalı olabilir.', ephemeral: true });
     }
 
     // Ban log kanalını ayarla
-    setBanLogChannel(ctx.guild.id, channel.id);
+    setBanLogChannel(interaction.guild.id, channel.id);
     
     const successEmbed = new EmbedBuilder()
       .setColor(0x00FF00) // Green success color
       .setTitle('✅ Ban Log Sistemi Aktifleştirildi')
       .setDescription(`**${channel}** kanalı ban logları için başarıyla ayarlandı.`)
-      .setThumbnail(ctx.guild.iconURL({ dynamic: true, size: 256 }) || 'https://cdn.discordapp.com/embed/avatars/0.png')
+      .setThumbnail(interaction.guild.iconURL({ dynamic: true, size: 256 }) || 'https://cdn.discordapp.com/embed/avatars/0.png')
       .addFields(
         {
-          name: '� Log İçeriği',
+          name: '📝 Log İçeriği',
           value: '```yaml\n✓ Ban işlemleri\n✓ Moderatör bilgileri  \n✓ Ban sebepleri\n✓ Tarih ve saat\n✓ Kullanıcı detayları\n```',
           inline: false
         },
@@ -63,11 +86,11 @@ module.exports = {
         }
       )
       .setFooter({ 
-        text: `${ctx.guild.name} • Ban sistemi güvenli şekilde yapılandırıldı`, 
-        iconURL: ctx.guild.iconURL({ dynamic: true }) || undefined 
+        text: `${interaction.guild.name} • Ban sistemi güvenli şekilde yapılandırıldı`, 
+        iconURL: interaction.guild.iconURL({ dynamic: true }) || undefined 
       })
       .setTimestamp();
     
-    return ctx.reply({ embeds: [successEmbed], ephemeral: true });
+    return interaction.reply({ embeds: [successEmbed], ephemeral: true });
   }
 };

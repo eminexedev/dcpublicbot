@@ -1,5 +1,4 @@
-const { SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
-const { createCanvas, loadImage } = require('canvas');
+const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -11,61 +10,73 @@ function loadStats(guildId) {
 	return stats[guildId] || null;
 }
 
-function getTop(obj, mapFn, limit = 5) {
-	return Object.entries(obj || {})
-		.sort((a, b) => b[1] - a[1])
-		.slice(0, limit)
-		.map(mapFn);
+function formatTime(sec) {
+	if (!sec) return '0 saniye';
+	const d = Math.floor(sec / 86400);
+	const h = Math.floor((sec % 86400) / 3600);
+	const m = Math.floor((sec % 3600) / 60);
+	const s = sec % 60;
+	let str = '';
+	if (d) str += `${d} gün `;
+	if (h) str += `${h} saat `;
+	if (m) str += `${m} dakika `;
+	if (s && !d && !h) str += `${s} saniye`;
+	return str.trim();
 }
 
-function drawRoundedRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
+function formatMsg(val) {
+	return val ? `${val} mesaj` : 'Veri yok';
+}
+
+function formatVoice(val) {
+	return val ? formatTime(val) : 'Veri yok';
+}
+
+// Kullanıcının ses sıralamasını hesapla
+function getUserVoiceRank(stats, userId) {
+	if (!stats || !stats.voiceUsers || !stats.voiceUsers[userId]) {
+		return 'Veri yok';
+	}
+
+	// Ses verilerine göre kullanıcıları sırala
+	const sortedUsers = Object.entries(stats.voiceUsers)
+		.sort((a, b) => b[1] - a[1]);
+	
+	// Kullanıcının sırasını bul
+	const userRank = sortedUsers.findIndex(entry => entry[0] === userId) + 1;
+	const totalUsers = sortedUsers.length;
+	
+	if (userRank === 0) return 'Veri yok';
+	
+	return `${userRank}/${totalUsers} (${getRankEmoji(userRank)})`;
+}
+
+// Sıralamaya göre emoji döndür
+function getRankEmoji(rank) {
+	if (rank === 1) return '🥇 Birinci';
+	if (rank === 2) return '🥈 İkinci';
+	if (rank === 3) return '🥉 Üçüncü';
+	if (rank <= 10) return '🏆 İlk 10';
+	if (rank <= 50) return '⭐ İlk 50';
+	return '🔹 Normal';
 }
 
 module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('stat')
-		.setDescription('Sunucu istatistiklerini görsel olarak gösterir.'),
-	async execute(ctx, args) {
-		let guild = ctx.guild;
-		let user = ctx.author || ctx.user;
-		let targetUser = user;
-
-		// Slash Command kontrolü
-		if (ctx.isCommand && ctx.isCommand()) {
-			// Slash command için user parametresi yoksa kendisi
-			targetUser = ctx.options?.getUser('kullanıcı') || user;
+		.setDescription('Sunucu istatistiklerini embed olarak gösterir.'),
+	async execute(ctx) {
+		let guild, user, reply;
+		if (ctx.isChatInputCommand && ctx.isChatInputCommand()) {
+			guild = ctx.guild;
+			user = ctx.user;
+			reply = (data) => ctx.reply(data);
+		} else if (ctx.message) {
+			guild = ctx.guild;
+			user = ctx.message.author;
+			reply = (data) => ctx.message.reply(data);
 		} else {
-			// Prefix komut - kullanıcı mention'ı kontrol et
-			if (args && args[0]) {
-				const mention = ctx.message?.mentions?.users?.first();
-				if (mention) {
-					targetUser = mention;
-				} else {
-					// ID ile de destekle
-					const possibleId = args[0].replace(/[<@!>]/g, '');
-					const member = guild.members.cache.get(possibleId);
-					if (member) {
-						targetUser = member.user;
-					} else {
-						// Kullanıcıyı fetch ile getir
-						try {
-							const fetchedUser = await ctx.client.users.fetch(possibleId);
-							if (fetchedUser) targetUser = fetchedUser;
-						} catch {}
-					}
-				}
-			}
+			return;
 		}
 
 		try {
@@ -74,45 +85,22 @@ module.exports = {
 		} catch (e) {}
 
 		const stats = loadStats(guild.id);
-		if (!stats) return ctx.reply('İstatistik verisi bulunamadı.');
+		if (!stats) return reply('İstatistik verisi bulunamadı.');
 
-		const member = guild.members.cache.get(targetUser.id);
-		const username = member ? member.displayName : targetUser.username;
-		// Avatar URL'sini düzelttik
-		const avatarURL = targetUser.displayAvatarURL({ extension: 'png', size: 128 }); // Parametreler güncellendi
+		const member = guild.members.cache.get(user.id);
+		const username = member ? member.displayName : user.username;
+		
+		// Avatar URL'sini gelişmiş seçeneklerle alma
+		const avatarURL = user.displayAvatarURL({ 
+			extension: 'png',  // PNG formatında
+			size: 128,         // 128x128 boyut
+			dynamic: true,     // Animasyonlu avatar varsa kullan
+			forceStatic: false // Animasyonu zorla statik yapma
+		});
 
-		// --- İstatistik verileri hesaplama ---
-
-		// AFK kanalında geçirilen süre (kullanıcıya özel)
-		let userAfkSec = 0;
-		let afkChannelName = 'Yok';
-		const afkChannelId = guild.afkChannelId;
-		if (afkChannelId) {
-			const afkChannel = guild.channels.cache.get(afkChannelId);
-			afkChannelName = afkChannel ? `🔕 ${afkChannel.name}` : `🔕 silinmiş-kanal (${afkChannelId})`;
-			if (stats.afkVoiceUsers && typeof stats.afkVoiceUsers[targetUser.id] === 'number') {
-				userAfkSec = stats.afkVoiceUsers[targetUser.id];
-			}
-		}
-
-		// Mesaj verileri
-		const userMsgCount = stats.users?.[targetUser.id] || 0;
-		const totalMsgCount = Object.values(stats.users || {}).reduce((a, b) => a + b, 0);
-		const msgRank = Object.entries(stats.users || {})
-			.sort((a, b) => b[1] - a[1])
-			.findIndex(([id]) => id === targetUser.id) + 1;
-
-		// Ses verileri
-		let userVoiceSec = 0;
-		if (stats.voiceUsers && Object.prototype.hasOwnProperty.call(stats.voiceUsers, targetUser.id)) {
-			const val = stats.voiceUsers[targetUser.id];
-			userVoiceSec = typeof val === 'number' && !isNaN(val) && isFinite(val) ? val : 0;
-		}
-		const totalVoiceSec = Object.values(stats.voiceUsers || {}).reduce((a, b) => (typeof b === 'number' && isFinite(b) ? a + b : a), 0);
-		const voiceRank = Object.entries(stats.voiceUsers || {})
-			.filter(([_, v]) => typeof v === 'number' && isFinite(v))
-			.sort((a, b) => b[1] - a[1])
-			.findIndex(([id]) => id === targetUser.id) + 1;
+		// Kullanıcıya özel mesaj ve ses verileri
+		const userMsgCount = stats.users?.[user.id] || 0;
+		const userVoiceSec = stats.voiceUsers?.[user.id] || 0;
 
 		// En çok mesaj atılan kanal
 		const topMsgChannelEntry = Object.entries(stats.channels || {}).sort((a, b) => b[1] - a[1])[0];
@@ -125,205 +113,250 @@ module.exports = {
 		const topVoiceChannelEntry = Object.entries(stats.voiceChannels || {}).sort((a, b) => b[1] - a[1])[0];
 		const topVoiceChannelId = topVoiceChannelEntry?.[0];
 		const topVoiceChannel = topVoiceChannelId ? guild.channels.cache.get(topVoiceChannelId) : null;
-		const topVoiceChannelName = topVoiceChannel ? `🔊 ${topVoiceChannel.name}` : (topVoiceChannelId ? `🔊 silinmiş-kanal (${topVoiceChannelId})` : 'Veri yok');
+		
+		// Ses kanalı tipini ve ikonunu belirleme
+		let voiceChannelIcon = '🔊';
+		if (topVoiceChannel) {
+			if (topVoiceChannel.type === ChannelType.GuildStageVoice) {
+				voiceChannelIcon = '🎭'; // Sahne kanalı
+			} else if (topVoiceChannel.rtcRegion === 'russia') {
+				voiceChannelIcon = '🎵'; // Müzik kalitesi
+			} else if (topVoiceChannel.videoQualityMode === 1) {
+				voiceChannelIcon = '📹'; // Yüksek video kalitesi
+			}
+		}
+		
+		const topVoiceChannelName = topVoiceChannel 
+			? `${voiceChannelIcon} ${topVoiceChannel.name}` 
+			: (topVoiceChannelId ? `${voiceChannelIcon} silinmiş-kanal (${topVoiceChannelId})` : 'Veri yok');
 		const topVoiceChannelSec = topVoiceChannelEntry?.[1] || 0;
 
-		// Mesaj arkadaşı (en çok mesaj atan diğer kullanıcı)
-		const msgFriends = Object.entries(stats.users || {})
-			.filter(([id]) => id !== targetUser.id)
-			.sort((a, b) => b[1] - a[1])
-			.slice(0, 3);  // İlk 3 arkadaşı al
-
-		// Ses arkadaşı (en çok sesde kalan diğer kullanıcı)
-		const voiceFriends = Object.entries(stats.voiceUsers || {})
-			.filter(([id]) => id !== targetUser.id)
-			.sort((a, b) => b[1] - a[1])
-			.slice(0, 3);  // İlk 3 arkadaşı al
-
-		// Yardımcı fonksiyonlar
-		function formatTime(sec) {
-			if (!sec) return '0 saniye';
-			const h = Math.floor(sec / 3600);
-			const m = Math.floor((sec % 3600) / 60);
-			const s = sec % 60;
-			let str = '';
-			if (h) str += `${h} saat `;
-			if (m) str += `${m} dakika `;
-			if (s || (!h && !m)) str += `${s} saniye`;
-			return str.trim();
+		// Kullanıcının anlık ses durumunu kontrol et
+		const currentVoiceState = guild.members.cache.get(user.id)?.voice;
+		let currentVoiceStatus = '🔴 Ses kanalında değil';
+		let currentChannel = null;
+		let isCurrentlyAFK = false;
+		
+		// AFK kanalında geçirilen süre (kullanıcıya özel)
+		let userAfkSec = 0;
+		let afkChannelName = 'Yok';
+		const afkChannelId = guild.afkChannelId;
+		
+		if (currentVoiceState && currentVoiceState.channelId) {
+			currentChannel = guild.channels.cache.get(currentVoiceState.channelId);
+			isCurrentlyAFK = currentVoiceState.channelId === afkChannelId;
+		}
+		
+		// Kayıtlı AFK süresi
+		if (afkChannelId) {
+			const afkChannel = guild.channels.cache.get(afkChannelId);
+			afkChannelName = afkChannel ? `🔕 ${afkChannel.name}` : `🔕 silinmiş-kanal (${afkChannelId})`;
+			if (stats.afkVoiceUsers && typeof stats.afkVoiceUsers[user.id] === 'number') {
+				userAfkSec = stats.afkVoiceUsers[user.id];
+			}
+			
+			// Kullanıcı şu anda AFK kanalındaysa, aktif süreyi ekle
+			const client = ctx.client || ctx.guild.client;
+			if (isCurrentlyAFK && client && client.activeVoiceStates && client.activeVoiceStates.has(`${guild.id}-${user.id}`)) {
+				const joinTime = client.activeVoiceStates.get(`${guild.id}-${user.id}`).joinTime;
+				const currentAfkSessionTime = Math.floor((Date.now() - joinTime) / 1000);
+				userAfkSec += currentAfkSessionTime;
+			}
+		}
+		
+		if (currentVoiceState && currentVoiceState.channelId) {
+			// Ses kanalı durumları
+			const isDeaf = currentVoiceState.deaf ? '🔇 Sağır' : '';
+			const isMute = currentVoiceState.mute ? '🔈 Susturulmuş' : '';
+			const isSelfDeaf = currentVoiceState.selfDeaf ? '🎧 Kendini Sağırlaştırmış' : '';
+			const isSelfMute = currentVoiceState.selfMute ? '🎤 Kendini Susturmuş' : '';
+			const isStreaming = currentVoiceState.streaming ? '📺 Yayın Yapıyor' : '';
+			const isVideo = currentVoiceState.selfVideo ? '🎥 Kamera Açık' : '';
+			
+			const statusEffects = [isDeaf, isMute, isSelfDeaf, isSelfMute, isStreaming, isVideo].filter(Boolean).join(', ');
+			
+			// İkon ve rengi duruma göre ayarla
+			let statusIcon = '🟢'; // Normal ses kanalı
+			if (isCurrentlyAFK) {
+				statusIcon = '🔕'; // AFK
+			} else if (currentVoiceState.streaming) {
+				statusIcon = '🟣'; // Yayın
+			} else if (currentVoiceState.selfVideo) {
+				statusIcon = '🔵'; // Video
+			}
+			
+			currentVoiceStatus = `${statusIcon} ${currentChannel ? currentChannel.name : 'Bilinmeyen Kanal'}${isCurrentlyAFK ? ' (AFK)' : ''}${statusEffects ? ` - ${statusEffects}` : ''}`;
 		}
 
-		const canvas = createCanvas(1152, 585);
-		const ctx2 = canvas.getContext('2d');
+		// Kullanıcının ses kanalı sırasını bulma
+		const userVoiceRank = getUserVoiceRank(stats, user.id);
+		
+		// Kullanıcının ses kanalında ne kadar süredir olduğunu hesaplama
+		let currentSessionDuration = 'Bağlı değil';
+		if (currentChannel && stats.voiceSessions && stats.voiceSessions[user.id]) {
+			const userSessions = stats.voiceSessions[user.id];
+			const currentSession = userSessions.find(s => s.channelId === currentChannel.id && !s.endTime);
+			if (currentSession) {
+				const sessionDuration = Math.floor((Date.now() - currentSession.startTime) / 1000);
+				currentSessionDuration = formatTime(sessionDuration);
+			}
+		}
 
-		// Arka plan
-		ctx2.fillStyle = '#18191C';
-		ctx2.fillRect(0, 0, canvas.width, canvas.height);
+		// Kullanıcının tüm konuştuğu kanalları topla
+		let voiceChannelsList = '';
+		let voiceChannelsCount = 0;
+		
+		// Ses kanalı kayıtlarını kullanarak kanal listesi oluştur
+		const userVoiceChannels = new Map();
+		
+		// Kullanıcı bazlı ses verilerini kontrol et (güncel veri yapısı)
+		if (stats.userVoiceData && stats.userVoiceData[user.id]) {
+			// Kullanıcının kanal verilerini al
+			const userChannels = stats.userVoiceData[user.id];
+			for (const [channelId, duration] of Object.entries(userChannels)) {
+				const channel = guild.channels.cache.get(channelId);
+				if (channel) {
+					userVoiceChannels.set(channelId, {
+						name: channel.name,
+						duration: duration,
+						id: channelId,
+						type: channel.type,
+						accurate: true
+					});
+				} else {
+					// Silinmiş kanal
+					userVoiceChannels.set(channelId, {
+						name: `Silinmiş Kanal`,
+						duration: duration,
+						id: channelId,
+						type: null,
+						accurate: true,
+						deleted: true
+					});
+				}
+			}
+		} 
+		// Eğer kullanıcı bazlı veri yoksa, genel ses verilerinden tahmin et
+		else if (stats.voiceChannels) {
+			// Sunucudaki tüm ses kanallarını gez
+			const totalServerVoice = Object.values(stats.voiceChannels).reduce((a, b) => a + b, 0);
+			
+			for (const [channelId, totalDuration] of Object.entries(stats.voiceChannels)) {
+				const channel = guild.channels.cache.get(channelId);
+				if (channel && totalServerVoice > 0 && userVoiceSec > 0) {
+					// Kullanıcının ses süresinin toplama oranı
+					const ratio = userVoiceSec / totalServerVoice;
+					// Tahmin edilen kanal süresi
+					const estimatedDuration = Math.floor(totalDuration * ratio);
+					
+					if (estimatedDuration > 0) {
+						userVoiceChannels.set(channelId, {
+							name: channel.name,
+							duration: estimatedDuration,
+							id: channelId,
+							type: channel.type,
+							estimated: true
+						});
+					}
+				}
+			}
+		}
+		
+		// Kullanıcının aktif ses oturumu varsa ekle
+		if (currentChannel && currentVoiceState) {
+			const client = ctx.client || ctx.guild.client;
+			if (client && client.activeVoiceStates && client.activeVoiceStates.has(`${guild.id}-${user.id}`)) {
+				const joinTime = client.activeVoiceStates.get(`${guild.id}-${user.id}`).joinTime;
+				const currentSessionTime = Math.floor((Date.now() - joinTime) / 1000);
+				
+				// Mevcut kanalı haritaya ekle ya da güncelle
+				if (userVoiceChannels.has(currentChannel.id)) {
+					const existing = userVoiceChannels.get(currentChannel.id);
+					existing.duration += currentSessionTime;
+					existing.current = true;
+				} else {
+					userVoiceChannels.set(currentChannel.id, {
+						name: currentChannel.name,
+						duration: currentSessionTime,
+						id: currentChannel.id,
+						type: currentChannel.type,
+						current: true
+					});
+				}
+			}
+		}
+		
+		// Haritayı süreye göre sıralanmış bir diziye dönüştür
+		const sortedChannels = [...userVoiceChannels.values()]
+			.filter(channel => channel.duration > 0)
+			.sort((a, b) => b.duration - a.duration)
+			.slice(0, 25); // Ham listede maksimum 25 (sonra 1024 sınırına göre keseceğiz)
 
-		// Profil kutusu
-		ctx2.save();
-		drawRoundedRect(ctx2, 20, 20, 320, 70, 24);
-		ctx2.fillStyle = '#232428';
-		ctx2.globalAlpha = 0.95;
-		ctx2.fill(); // drawRoundedRect sonrası fill çağrılıyor
-		ctx2.restore();
+		// Satırları önce diziye koy, sonra 1024 sınırına göre birleştir
+		const channelLines = [];
+		for (const channel of sortedChannels) {
+			let channelIcon = '🔊';
+			if (channel.type === ChannelType.GuildStageVoice) channelIcon = '🎭';
+			const currentIndicator = channel.current ? ' `✓`' : '';
+			channelLines.push(`${channelIcon} [${channel.name}](https://discord.com/channels/${guild.id}/${channel.id})${currentIndicator} - ${formatTime(channel.duration)}`);
+		}
 
-		// Profil avatarı
-		const avatar = await loadImage(avatarURL);
-		ctx2.save();
-		ctx2.beginPath();
-		ctx2.arc(60, 55, 35, 0, Math.PI * 2, true);
-		ctx2.closePath();
-		ctx2.clip();
-		ctx2.drawImage(avatar, 25, 20, 70, 70);
-		ctx2.restore();
+		if (userVoiceChannels.size > sortedChannels.length) {
+			channelLines.push(`*...ve ${userVoiceChannels.size - sortedChannels.length} kanal daha*`);
+		}
 
-		// Kullanıcı adı
-		ctx2.font = 'bold 32px sans-serif';
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText(username, 110, 65);
+		// 1024 karakter sınırını aşmadan satırları ekle
+		let assembled = '';
+		for (const line of channelLines) {
+			if ((assembled + line + '\n').length > 1024) break;
+			assembled += line + '\n';
+			voiceChannelsCount++;
+		}
 
-		// "70 günlük veri" kutusu
-		ctx2.save();
-		ctx2.globalAlpha = 1;
-		ctx2.strokeStyle = '#A259FF';
-		ctx2.lineWidth = 2;
-		drawRoundedRect(ctx2, 900, 30, 210, 40, 16);
-		ctx2.stroke();
-		ctx2.font = 'bold 22px sans-serif';
-		ctx2.fillStyle = '#A259FF';
-		ctx2.fillText('70 günlük veri', 930, 60);
-		ctx2.restore();
+		voiceChannelsList = assembled.trim();
+		if (!voiceChannelsList) voiceChannelsList = 'Henüz ses kanallarında vakit geçirmemiş.';
 
-		// SIRALAMA BİLGİLERİ kutusu
-		ctx2.save();
-		ctx2.globalAlpha = 0.95;
-		ctx2.fillStyle = '#232428';
-		drawRoundedRect(ctx2, 20, 110, 250, 180, 18);
-		ctx2.fill();
-		ctx2.restore();
-		ctx2.font = 'bold 20px sans-serif';
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText('SIRALAMA BİLGİLERİ', 40, 140);
+		// Son güvenlik: yine de 1024 üzeriyse brute force kes
+		if (voiceChannelsList.length > 1024) {
+			voiceChannelsList = voiceChannelsList.slice(0, 1000) + '...';
+		}
 
-		// MESAJ BİLGİLERİ kutusu
-		ctx2.save();
-		ctx2.globalAlpha = 0.95;
-		ctx2.fillStyle = '#232428';
-		drawRoundedRect(ctx2, 290, 110, 270, 180, 18);
-		ctx2.fill();
-		ctx2.restore();
-		ctx2.font = 'bold 20px sans-serif';
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText('MESAJ BİLGİLERİ', 310, 140);
+		// Genel alan truncate helper
+		const safeField = (val) => {
+			if (!val) return 'Veri yok';
+			return val.length <= 1024 ? val : (val.slice(0, 1000) + '...');
+		};
+		
+		const embed = new EmbedBuilder()
+			.setAuthor({ name: `${username} (${user.id}) üyesinin istatistikleri`, iconURL: avatarURL })
+			.setColor('#5865F2')
+			.addFields(
+				{
+					name: 'Mesaj Bilgileri',
+					value: safeField(
+						`Toplam Mesaj: **${userMsgCount}**\n` +
+						`En Aktif Kanal: ${topMsgChannelName} (${topMsgChannelCount ? topMsgChannelCount + ' mesaj' : 'Veri yok'})`
+					)
+				},
+				{
+					name: 'Ses Bilgileri',
+					value: safeField(
+						`Toplam Ses: **${formatTime(userVoiceSec)}**\n` +
+						`En Aktif Ses Kanalı: ${topVoiceChannelName} (${topVoiceChannelSec ? formatTime(topVoiceChannelSec) : 'Veri yok'})\n` +
+						`Ses Sıralaması: ${userVoiceRank}`
+					)
+				},
+				{
+					name: 'Ses Kanalları',
+					value: voiceChannelsList
+				},
+				{
+					name: 'AFK Bilgileri',
+					value: safeField(`${afkChannelName} (AFK)\nAFK Süresi: ${userAfkSec ? formatTime(userAfkSec) : 'Veri yok'}`)
+				}
+			)
+			.setFooter({ text: 'Detaylı istatistik için .stat yazınız.' });
 
-		// SES BİLGİLERİ kutusu
-		ctx2.save();
-		ctx2.globalAlpha = 0.95;
-		ctx2.fillStyle = '#232428';
-		drawRoundedRect(ctx2, 570, 110, 270, 180, 18);
-		ctx2.fill();
-		ctx2.restore();
-		ctx2.font = 'bold 20px sans-serif';
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText('SES BİLGİLERİ', 590, 140);
-
-		// EN AKTİF OLDUĞU KANALLAR kutusu
-		ctx2.save();
-		ctx2.globalAlpha = 0.95;
-		ctx2.fillStyle = '#232428';
-		drawRoundedRect(ctx2, 20, 310, 540, 180, 18);
-		ctx2.fill();
-		ctx2.restore();
-		ctx2.font = 'bold 20px sans-serif';
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText('EN AKTİF OLDUĞU KANALLAR', 40, 340);
-
-		// ARKADAŞ BİLGİLERİ kutusu
-		ctx2.save();
-		ctx2.globalAlpha = 0.95;
-		ctx2.fillStyle = '#232428';
-		drawRoundedRect(ctx2, 580, 310, 400, 180, 18);
-		ctx2.fill();
-		ctx2.restore();
-		ctx2.font = 'bold 20px sans-serif';
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText('ARKADAŞ BİLGİLERİ', 600, 340);
-
-		// Örnek veri yerleşimi (sahte veriler, kendi istatistiklerinizi buraya yerleştirin)
-		ctx2.font = '18px sans-serif';
-		ctx2.fillStyle = '#bbb';
-		// Sıralama Bilgileri
-		ctx2.fillText(`SES      ${voiceRank || '-'}. sırada`, 40, 175);
-		ctx2.fillStyle = '#FFA500';
-		ctx2.fillText(`MESAJ    ${msgRank || '-'}. sırada`, 40, 205);
-		ctx2.fillStyle = '#bbb';
-		ctx2.fillText('YAYIN    -', 40, 235);
-		ctx2.fillText('KAMERA   -', 40, 265);
-
-		// Mesaj Bilgileri
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText('TOPLAM', 310, 175);
-		ctx2.fillText('BUGÜN', 310, 205);
-		ctx2.fillText('BU HAFTA', 310, 235);
-		ctx2.fillText('BU AY', 310, 265);
-		ctx2.fillStyle = '#bbb';
-		ctx2.fillText(`${userMsgCount} mesaj`, 410, 175);
-		ctx2.fillText('-', 410, 205); // Günlük/haftalık/aylık için veri yoksa '-' yaz
-		ctx2.fillText('-', 410, 235);
-		ctx2.fillText('-', 410, 265);
-
-		// Ses Bilgileri
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText('TOPLAM', 590, 175);
-		ctx2.fillText('BUGÜN', 590, 205);
-		ctx2.fillText('BU HAFTA', 590, 235);
-		ctx2.fillText('BU AY', 590, 265);
-		ctx2.fillStyle = '#bbb';
-		ctx2.fillText(formatTime(userVoiceSec), 690, 175);
-		ctx2.fillText('-', 690, 205);
-		ctx2.fillText('-', 690, 235);
-		ctx2.fillText('-', 690, 265);
-
-		// En Aktif Olduğu Kanallar
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText(topMsgChannelName, 40, 380);
-		ctx2.fillStyle = '#bbb';
-		ctx2.fillText(topMsgChannelCount ? `${topMsgChannelCount} mesaj` : 'Veri yok', 200, 380);
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText(topVoiceChannelName, 40, 410);
-		ctx2.fillStyle = '#bbb';
-		ctx2.fillText(topVoiceChannelSec ? formatTime(topVoiceChannelSec) : 'Veri yok', 200, 410);
-
-		// AFK kanalında geçirilen süre (kullanıcıya özel)
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText(afkChannelName + ' (AFK)', 40, 440);
-		ctx2.fillStyle = '#bbb';
-		ctx2.fillText(userAfkSec ? formatTime(userAfkSec) : 'Veri yok', 200, 440);
-
-		// Mesaj arkadaşı (en çok mesaj atan diğer kullanıcı)
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText('MESAJ ARKADAŞLARI', 600, 380);
-		ctx2.fillStyle = '#bbb';
-		msgFriends.forEach((friend, index) => {
-			const [id, count] = friend;
-			const friendMember = guild.members.cache.get(id);
-			const friendName = friendMember ? friendMember.displayName : 'Bilinmeyen Kullanıcı';
-			ctx2.fillText(`${friendName}: ${count} mesaj`, 600, 410 + (index * 25));
-		});
-
-		ctx2.fillStyle = '#fff';
-		ctx2.fillText('SES ARKADAŞLARI', 600, 470);
-		ctx2.fillStyle = '#bbb';
-		voiceFriends.forEach((friend, index) => {
-			const [id, duration] = friend;
-			const friendMember = guild.members.cache.get(id);
-			const friendName = friendMember ? friendMember.displayName : 'Bilinmeyen Kullanıcı';
-			ctx2.fillText(`${friendName}: ${formatTime(duration)}`, 600, 500 + (index * 25));
-		});
-
-		const buffer = canvas.toBuffer();
-		const attachment = new AttachmentBuilder(buffer, { name: 'stat.png' });
-		await ctx.reply({ files: [attachment] });
+		await reply({ embeds: [embed] });
 	}
 };

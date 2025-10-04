@@ -15,38 +15,49 @@ module.exports = {
       option.setName('url').setDescription('Emoji görselinin Discord CDN linki').setRequired(false)
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageEmojisAndStickers),
-  async execute(ctx) {
-    const { guild, reply } = ctx;
-    let isim, gorsel, url;
+  async execute(interaction) {
+    const guild = interaction.guild;
     
-    if (ctx.type === 'slash') {
-      isim = ctx.interaction.options.getString('isim');
-      gorsel = ctx.interaction.options.getAttachment('gorsel');
-      url = ctx.interaction.options.getString('url');
-    } else {
-      isim = ctx.args[0];
-      url = ctx.args[1] && ctx.args[1].startsWith('http') ? ctx.args[1] : null;
-      gorsel = ctx.message.attachments.first();
-      if (!isim || (!gorsel && !url)) {
-        return reply('Kullanım: /emoji isim:[isim] gorsel:[dosya] veya /emoji isim url:[link]');
-      }
+    const isim = interaction.options.getString('isim');
+    const gorsel = interaction.options.getAttachment('gorsel');
+    const url = interaction.options.getString('url');
+    
+    if (!gorsel && !url) {
+      return interaction.reply({
+        content: '❌ Emoji eklemek için bir görsel (attachment) veya URL belirtmelisin.',
+        ephemeral: true
+      });
     }
-    if (!guild) return reply('Sunucu bulunamadı.');
+
     let attachmentUrl = null;
     if (url && url.startsWith('http')) {
       attachmentUrl = url;
     } else if (gorsel && gorsel.url) {
       attachmentUrl = gorsel.url;
     }
-    if (!attachmentUrl) return reply('Bir görsel dosyası eklemeli veya geçerli bir link vermelisin.');
+
+    if (!attachmentUrl) {
+      return interaction.reply({
+        content: '❌ Bir görsel dosyası eklemeli veya geçerli bir link vermelisin.',
+        ephemeral: true
+      });
+    }
+
     try {
       const emoji = await guild.emojis.create({
         name: isim,
         attachment: attachmentUrl
       });
-      return reply(`Emoji başarıyla eklendi: <:${emoji.name}:${emoji.id}>`);
+      
+      return interaction.reply({
+        content: `✅ Emoji başarıyla eklendi: <:${emoji.name}:${emoji.id}>`,
+        ephemeral: false
+      });
     } catch (err) {
-      return reply(`Emoji eklenirken hata oluştu: ${err.message}`);
+      return interaction.reply({
+        content: `❌ Emoji eklenirken hata oluştu: ${err.message}`,
+        ephemeral: true
+      });
     }
   }
 };

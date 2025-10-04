@@ -7,6 +7,7 @@ const logConfigPath = path.join(__dirname, 'logConfig.json');
 const autoLogConfigPath = path.join(__dirname, 'autoLogConfig.json');
 const inviteConfigPath = path.join(__dirname, 'inviteConfig.json');
 const prefixConfigPath = path.join(__dirname, 'prefixConfig.json');
+const jailConfigPath = path.join(__dirname, 'jailConfig.json');
 
 // ========================
 // BAN CONFIG FUNCTIONS
@@ -137,6 +138,30 @@ function findAnyLogChannel(guildId, preferredType = null) {
 }
 
 // ========================
+// JAIL CONFIG FUNCTIONS
+// ========================
+
+// Jail rolünü al
+function getJailRole(guildId) {
+  if (!fs.existsSync(jailConfigPath)) return null;
+  const data = JSON.parse(fs.readFileSync(jailConfigPath, 'utf8'));
+  return data[guildId]?.jailRoleId || null;
+}
+
+// Jail rolünü ayarla
+function setJailRole(guildId, roleId) {
+  let data = {};
+  if (fs.existsSync(jailConfigPath)) {
+    data = JSON.parse(fs.readFileSync(jailConfigPath, 'utf8'));
+  }
+  if (!data[guildId]) {
+    data[guildId] = {};
+  }
+  data[guildId].jailRoleId = roleId;
+  fs.writeFileSync(jailConfigPath, JSON.stringify(data, null, 2));
+}
+
+// ========================
 // CONFIG STATUS CHECKER
 // ========================
 
@@ -147,6 +172,7 @@ function getAllConfigStatus(guildId) {
     generalLog: getLogChannel(guildId), 
     autoLog: getAutoLogChannel(guildId),
     inviteLog: getInviteLogChannel(guildId),
+    jailRole: getJailRole(guildId),
     prefixLog: (() => {
       try {
         const prefixConfig = JSON.parse(fs.readFileSync('./prefixConfig.json', 'utf8'));
@@ -178,6 +204,10 @@ module.exports = {
   // Invite Config
   getInviteLogChannel,
   setInviteLogChannel,
+  
+  // Jail Config
+  getJailRole,
+  setJailRole,
   
   // Utility Functions
   findAnyLogChannel,

@@ -13,8 +13,11 @@ module.exports = {
     usage: '.istatistik',
     permissions: [],
 
-    async execute(ctx) {
-        const client = ctx.client;
+    async execute(interaction) {
+        const client = interaction.client;
+
+        // Ping ölçümü için başlangıç zamanı
+        const pingStart = Date.now();
 
         // Bot başlangıç zamanını hesapla
         const uptime = process.uptime();
@@ -27,13 +30,16 @@ module.exports = {
         const used = process.memoryUsage();
         const ram = (used.heapUsed / 1024 / 1024).toFixed(2);
 
-        // Ping detayları
-        const wsping = Math.abs(Math.round(client.ws.ping)) || 0;
-        const startTime = Date.now();
-        const botPing = Math.abs(ctx.type === 'prefix' ? 
-            startTime - ctx.message.createdTimestamp : 
-            startTime - ctx.createdTimestamp);
-        const apiPing = Math.abs(Math.round(client.ws.ping)) || 0;
+        // Ping detayları - Güvenli hesaplama
+        const wsPingRaw = client.ws.ping;
+        const wsping = (wsPingRaw && wsPingRaw > 0) ? Math.round(wsPingRaw) : 1;
+        
+        // Bot ping hesaplaması - daha güvenli
+        const botPingRaw = Date.now() - interaction.createdTimestamp;
+        const botPing = Math.max(Math.abs(botPingRaw), 1);
+        
+        // API ping
+        const apiPing = wsping;
 
         const embed = new EmbedBuilder()
             .setColor('#5865F2')
@@ -67,7 +73,7 @@ module.exports = {
                     value: [
                         `> **İşletim Sistemi:** ${os.type()} ${os.release()}`,
                         `> **CPU:** ${os.cpus()[0].model}`,
-                        `> **CPU Kullanımı:** ${(process.cpuUsage().user / 1024 / 1024).toFixed(2)}%`,
+                        `> **CPU Çekirdek Sayısı:** ${os.cpus().length}`,
                         `> **Toplam RAM:** ${(os.totalmem() / 1024 / 1024 / 1024).toFixed(2)} GB`,
                         `> **Boş RAM:** ${(os.freemem() / 1024 / 1024 / 1024).toFixed(2)} GB`
                     ].join('\n')
@@ -76,6 +82,6 @@ module.exports = {
             .setFooter({ text: 'Bot istatistikleri anlık olarak güncellenir.' })
             .setTimestamp();
 
-        await ctx.reply({ embeds: [embed] });
+        await interaction.reply({ embeds: [embed] });
     }
 };

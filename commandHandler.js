@@ -137,8 +137,8 @@ module.exports = (client) => {
     }
     // Mute seçim menüsü
     if (
-      (interaction.isStringSelectMenu && interaction.customId.startsWith('mute_')) ||
-      (typeof interaction.isStringSelectMenu === 'function' && interaction.isStringSelectMenu() && interaction.customId.startsWith('mute_'))
+      (interaction.isStringSelectMenu && interaction.customId && interaction.customId.startsWith('mute_')) ||
+      (typeof interaction.isStringSelectMenu === 'function' && interaction.isStringSelectMenu() && interaction.customId && interaction.customId.startsWith('mute_'))
     ) {
       // SÜPER GÜÇLÜ SELECT MENU EXECUTION KONTROLÜ
       if (!client._selectMenuExecutions) client._selectMenuExecutions = new Set();
@@ -175,8 +175,8 @@ module.exports = (client) => {
     
     // Jail seçim menüsü
     if (
-      (interaction.isStringSelectMenu && interaction.customId.startsWith('jail_')) ||
-      (typeof interaction.isStringSelectMenu === 'function' && interaction.isStringSelectMenu() && interaction.customId.startsWith('jail_'))
+      (interaction.isStringSelectMenu && interaction.customId && interaction.customId.startsWith('jail_')) ||
+      (typeof interaction.isStringSelectMenu === 'function' && interaction.isStringSelectMenu() && interaction.customId && interaction.customId.startsWith('jail_'))
     ) {
       // SÜPER GÜÇLÜ SELECT MENU EXECUTION KONTROLÜ
       if (!client._selectMenuExecutions) client._selectMenuExecutions = new Set();
@@ -212,16 +212,16 @@ module.exports = (client) => {
     }
     // Kayıt seçim menüsü
     if (
-      (interaction.isStringSelectMenu && interaction.customId.startsWith('kayit_')) ||
-      (typeof interaction.isStringSelectMenu === 'function' && interaction.isStringSelectMenu() && interaction.customId.startsWith('kayit_'))
+      (interaction.isStringSelectMenu && interaction.customId && interaction.customId.startsWith('kayit_')) ||
+      (typeof interaction.isStringSelectMenu === 'function' && interaction.isStringSelectMenu() && interaction.customId && interaction.customId.startsWith('kayit_'))
     ) {
       const kayit = client.commands.get('kayıt');
       if (kayit && kayit.handleSelectMenu) {
         await kayit.handleSelectMenu(interaction);
       }
     }
-    // Modal işlemleri (kayıt yaş modal'ı)
-    if (interaction.isModalSubmit && interaction.customId.startsWith('age_')) {
+    // Modal işlemleri (kayıt modal'ı)
+    if (interaction.isModalSubmit && interaction.customId && interaction.customId.startsWith('registration_')) {
       const kayit = client.commands.get('kayıt');
       if (kayit && kayit.handleModal) {
         await kayit.handleModal(interaction);
@@ -259,7 +259,7 @@ module.exports = (client) => {
     if (!command) return;
     
     // MODERATION KOMUTLARI İÇİN EK GÜVENLİK KONTROLÜ
-    const moderationCommands = ['mute', 'unmute', 'ban', 'kick', 'kayıt', 'kayit'];
+    const moderationCommands = ['mute', 'unmute', 'ban', 'unban', 'kick', 'kayıt', 'kayit'];
     if (moderationCommands.includes(commandName)) {
       console.log(`🛡️ [SECURITY] Moderation komut girişimi: ${commandName} - User: ${message.author.tag} (${message.author.id})`);
       
@@ -273,6 +273,7 @@ module.exports = (client) => {
         'mute': 'MuteMembers',
         'unmute': 'MuteMembers', 
         'ban': 'BanMembers',
+        'unban': 'BanMembers',
         'kick': 'KickMembers',
         'kayıt': 'ManageRoles',
         'kayit': 'ManageRoles'

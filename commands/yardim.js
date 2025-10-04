@@ -58,11 +58,24 @@ function getModCommandsEmbed() {
 					   '`/kick <kullanıcı> [sebep]` - Kullanıcıyı sunucudan atar\n' +
 					   '`/mute <kullanıcı>` - İnteraktif menü ile kullanıcıyı susturur\n' +
 					   '`/unmute <kullanıcı> [sebep]` - Kullanıcının susturmasını kaldırır\n' +
-					   '`/kayıt <kullanıcı>` - İnteraktif kayıt sistemi (cinsiyet + yaş)\n' +
 					   '`/sil <sayı>` - Belirtilen sayıda mesajı siler (1-100)\n\n' +
 					   '**🔇 Mute Sistemi:**\n' +
 					   '• `!mute @user` → Dropdown menü açılır\n' +
 					   '• Sebep seçenekleri: Küfür (5dk), ADK (30dk), Kışkırtma (5dk), Tehdit (20dk)',
+				inline: false
+			},
+			{
+				name: '📝 Kayıt Sistemi',
+				value: '`/kayıt <kullanıcı>` - İnteraktif kayıt sistemi (cinsiyet + yaş)\n' +
+					   '`/topkayıt` - Kayıt istatistiklerini gösterir (erkek/kadın/en çok kayıt yapanlar)\n' +
+					   '`/kayıt-ayar log-kanal <#kanal>` - Kayıt log kanalını ayarlar\n' +
+					   '`/kayıt-ayar erkek-rol <@rol>` - Erkek rolünü ayarlar\n' +
+					   '`/kayıt-ayar kadın-rol <@rol>` - Kadın rolünü ayarlar\n' +
+					   '`/kayıt-ayar üye-rol <@rol>` - Üye rolünü ayarlar\n' +
+					   '`/kayıt-ayar kayıtsız-rol <@rol>` - Kayıtsız rolünü ayarlar\n' +
+					   '`/kayıt-ayar durum` - Kayıt sistemi yapılandırma durumu\n' +
+					   '`/kayıt-ayar sıfırla` - Tüm kayıt ayarlarını sıfırlar\n' +
+					   '• Yeni üyeler otomatik kayıtsız rol alır',
 				inline: false
 			},
 			{
@@ -102,8 +115,26 @@ function getModCommandsEmbed() {
 				name: '🏗️ Sunucu Şablonu',
 				value: '`/sunucusablon <şablon_linki>` - Discord şablonunu uygular\n' +
 					   '`/sunucubilgilendirme` - Sunucu hakkında detaylı bilgi\n' +
+					   '`/şablon-oluştur <isim> [açıklama]` - Mevcut sunucu yapısından şablon oluşturur\n' +
+					   '`/şablonlar [şablon-id]` - Kayıtlı şablonları listeler ve detaylarını gösterir\n' +
+					   '`/discord-şablonları <listele|sil|sync>` - Discord şablonlarını yönetir\n' +
 					   '• Otomatik kanal ve rol oluşturma\n' +
-					   '• Şablon uygulanırken güvenlik kontrolü',
+					   '• Discord şablon API entegrasyonu\n' +
+					   '• Şablon senkronizasyonu ve güncelleme\n' +
+					   '• Gelişmiş şablon analizi ve kaydetme',
+				inline: false
+			},
+			{
+				name: '🛡️ Güvenlik Sistemi',
+				value: '`/güvenlik-sistemi durum` - Güvenlik sistemi durumunu gösterir\n' +
+					   '`/güvenlik-sistemi aç/kapat` - Sistemi aktif/pasif yapar\n' +
+					   '`/güvenlik-sistemi ayar` - Eşik, ceza türü, log kanalı ayarları\n' +
+					   '`/güvenlik-sistemi muaf-rol <rol> <ekle/kaldır>` - Muaf rol yönetimi\n' +
+					   '`/güvenlik-sistemi ihlal-temizle <kullanıcı>` - İhlal geçmişi temizle\n' +
+					   '• 24 saatte 3+ ban/kick yapan yetkileri otomatik jail\n' +
+					   '• Sağ tık ban/kick dahil tüm moderasyon izleme\n' +
+					   '• Whitelist sistemi ve muafiyet yönetimi\n' +
+					   '• Detaylı ihlal takibi ve raporlama',
 				inline: false
 			}
 		)

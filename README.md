@@ -6,6 +6,7 @@ Gelişmiş moderasyon ve etkileşimli özellikler içeren Discord botu.
 ## ✨ Özellikler
 
 ### 🛡️ Moderasyon Sistemi
+
 - **Ban/Unban**: Gelişmiş yasaklama sistemi
 - **Kick**: Kullanıcı atma
 - **Mute/Unmute**: İnteraktif susturma sistemi  
@@ -13,16 +14,19 @@ Gelişmiş moderasyon ve etkileşimli özellikler içeren Discord botu.
 - **Lock/Unlock**: Kanal kilitleme (yetkili rol istisna sistemi)
 
 ### 👥 Kullanıcı Sistemi
+
 - **Kayıt**: İnteraktif kayıt sistemi (cinsiyet seçimi, yaş modal)
 - **Rol Yönetimi**: Rol verme/alma komutları
 - **İstatistikler**: Sunucu ve kullanıcı istatistikleri
 
 ### 📝 Log Sistemi
+
 - **Çoklu Log Desteği**: Farklı işlemler için ayrı kanallar
 - **Detaylı Raporlama**: Timestamp'li ve embed formatında loglar
 - **Konfigürasyon**: Her sunucu için özelleştirilebilir
 
 ### 🎮 Eğlence
+
 - **Çekiliş**: Giveaway sistemi
 - **Emoji**: Emoji yönetimi
 - **Avatar**: Kullanıcı avatar görüntüleme
@@ -30,6 +34,7 @@ Gelişmiş moderasyon ve etkileşimli özellikler içeren Discord botu.
 ## 🚀 Kurulum
 
 ### Gereksinimler
+
 - Node.js 18+ 
 - pnpm (önerilen paket yöneticisi)
 
@@ -79,6 +84,7 @@ Bot için gerekli izinler:
 ## 📋 Komut Listesi
 
 ### Moderasyon
+
 - `!ban @kullanici [sebep]` - Kullanıcıyı yasaklar
 - `!unban <kullanici_id>` - Yasağı kaldırır
 - `!kick @kullanici [sebep]` - Kullanıcıyı atar
@@ -90,6 +96,7 @@ Bot için gerekli izinler:
 - `!unlock` - Kanal kilidini açar
 
 ### Sistem Kurulumu
+
 - `!jailrol @rol` - Jail rolünü ayarlar
 - `!unjailrol @rol` - Unjail rolünü ayarlar
 - `!lockrol @rol` - Varsayılan lock rolünü ayarlar

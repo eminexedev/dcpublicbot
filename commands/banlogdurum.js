@@ -13,17 +13,17 @@ module.exports = {
   usage: '.banlogdurum',
   permissions: [PermissionFlagsBits.Administrator],
 
-  async execute(ctx) {
-    const banLogChannelId = getBanLogChannel(ctx.guild.id);
+  async execute(interaction) {
+    const banLogChannelId = getBanLogChannel(interaction.guild.id);
     
     const statusEmbed = new EmbedBuilder()
       .setTitle('🔨 Ban Log Sistemi Durumu')
       .setColor('#FF6B35')
       .setTimestamp()
-      .setFooter({ text: ctx.guild.name, iconURL: ctx.guild.iconURL() || undefined });
+      .setFooter({ text: interaction.guild.name, iconURL: interaction.guild.iconURL() || undefined });
 
     if (banLogChannelId) {
-      const logChannel = ctx.guild.channels.cache.get(banLogChannelId);
+      const logChannel = interaction.guild.channels.cache.get(banLogChannelId);
       if (logChannel) {
         statusEmbed.setDescription('✅ Ban log sistemi aktif!')
           .addFields(
@@ -99,6 +99,6 @@ module.exports = {
         );
     }
 
-    return ctx.reply({ embeds: [statusEmbed], ephemeral: true });
+    return interaction.reply({ embeds: [statusEmbed], ephemeral: true });
   }
 };

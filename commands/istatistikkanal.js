@@ -27,57 +27,45 @@ module.exports = {
   usage: '.istatistikkanal <tip> <kanal_türü>',
   permissions: [PermissionFlagsBits.Administrator],
 
-  async execute(ctx, args) {
-    let tip, kanalturu;
+  async execute(interaction) {
+    const tip = interaction.options.getString('tip');
+    const kanalTuru = interaction.options.getString('kanalturu');
 
-    if (ctx.isCommand && ctx.isCommand()) {
-      // Slash komut
-      tip = ctx.options.getString('tip');
-      kanalturu = ctx.options.getString('kanalturu');
-    } else {
-      // Prefix komut
-      if (!args[0] || !args[1]) {
-        return ctx.reply({
-          content: 'Lütfen tip (uye/aktif) ve kanal türü (text/voice) belirtin.\nÖrnek: `.istatistikkanal uye voice`',
-          ephemeral: true
-        });
-      }
-      tip = args[0];
-      kanalturu = args[1];
-    }
-
-    if (!tip || !kanalturu) {
-      return ctx.reply({
-        content: 'Lütfen tip (uye/aktif) ve kanal türü (text/voice) belirtin.\nÖrnek: `.istatistikkanal uye voice`',
-        ephemeral: true
-      });
-    }
-
-    if (!['uye','aktif'].includes(tip) || !['text','voice'].includes(kanalturu)) {
-      return ctx.reply({ 
+    if (!['uye','aktif'].includes(tip) || !['text','voice'].includes(kanalTuru)) {
+      return interaction.reply({ 
         content: 'Geçerli tip (uye/aktif) ve kanal türü (text/voice) belirtmelisin.', 
         ephemeral: true 
       });
     }
 
-    let channel;
-    if (kanalturu === 'text') {
-      channel = await ctx.guild.channels.create({
-        name: tip === 'uye' ? 'üye-sayısı-0' : 'aktif-kullanıcı-0',
-        type: ChannelType.GuildText,
-        reason: 'İstatistik kanalı oluşturuldu.'
+    try {
+      let channel;
+      if (kanalTuru === 'text') {
+        channel = await interaction.guild.channels.create({
+          name: tip === 'uye' ? 'üye-sayısı-0' : 'aktif-kullanıcı-0',
+          type: ChannelType.GuildText,
+          reason: 'İstatistik kanalı oluşturuldu.'
+        });
+      } else if (kanalTuru === 'voice') {
+        channel = await interaction.guild.channels.create({
+          name: tip === 'uye' ? 'Üye: 0' : 'Aktif: 0',
+          type: ChannelType.GuildVoice,
+          reason: 'İstatistik kanalı oluşturuldu.'
+        });
+      }
+
+      setStatsChannel(interaction.guild.id, tip, channel.id);
+      
+      await interaction.reply({ 
+        content: `✅ Başarıyla yeni kanal oluşturuldu: ${channel} (${tip === 'uye' ? 'Üye Sayısı' : 'Aktif Kullanıcı'})`,
+        ephemeral: false
       });
-    } else if (kanalturu === 'voice') {
-      channel = await ctx.guild.channels.create({
-        name: tip === 'uye' ? 'Üye: 0' : 'Aktif: 0',
-        type: ChannelType.GuildVoice,
-        reason: 'İstatistik kanalı oluşturuldu.'
+    } catch (error) {
+      console.error('İstatistik kanalı oluşturma hatası:', error);
+      await interaction.reply({
+        content: '❌ Kanal oluşturulurken hata oluştu.',
+        ephemeral: true
       });
     }
-
-    setStatsChannel(ctx.guild.id, tip, channel.id);
-    await ctx.reply({ 
-      content: `Başarıyla yeni kanal oluşturuldu: ${channel} (${tip === 'uye' ? 'Üye Sayısı' : 'Aktif Kullanıcı'})` 
-    });
   }
 };
