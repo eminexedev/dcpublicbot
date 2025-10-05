@@ -129,7 +129,14 @@ module.exports = {
         }
       }
 
-      const config = getSecurityConfig(ctx.guild.id);
+  let config = getSecurityConfig(ctx.guild.id) || {};
+  // Normalizasyon: Eksik alanları doldur
+  config.whitelistedRoles = Array.isArray(config.whitelistedRoles) ? config.whitelistedRoles : [];
+  config.exemptUsers = Array.isArray(config.exemptUsers) ? config.exemptUsers : [];
+  if (typeof config.enabled !== 'boolean') config.enabled = false;
+  if (typeof config.banThreshold !== 'number') config.banThreshold = 3;
+  if (!config.punishment) config.punishment = 'jail';
+  if (!config.logChannel) config.logChannel = null;
 
       switch (subcommand) {
         case 'durum':

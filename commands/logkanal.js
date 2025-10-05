@@ -18,7 +18,13 @@ module.exports = {
 	
 	async execute(ctx, args) {
 		// ctx hem slash interaction hem de prefix message olabilir
-		const isSlash = !!(ctx.isChatInputCommand && ctx.isChatInputCommand());
+		// Daha güvenli slash tespiti: interaction benzeri objelerde isChatInputCommand fonksiyonu var ve true dönerse slash'tır
+		let isSlash = false;
+		try {
+			if (typeof ctx.isChatInputCommand === 'function' && ctx.isChatInputCommand()) {
+				isSlash = true;
+			}
+		} catch {}
 		const guild = ctx.guild || (ctx.message && ctx.message.guild);
 		if (!guild) {
 			if (isSlash) return ctx.reply({ content: 'Sunucu bağlamı bulunamadı.', ephemeral: true });
@@ -35,8 +41,15 @@ module.exports = {
 
 		let channel = null;
 		if (isSlash) {
-			channel = ctx.options.getChannel('kanal');
-		} else {
+			// ctx.options güvenli kontrol
+			if (ctx.options && typeof ctx.options.getChannel === 'function') {
+				channel = ctx.options.getChannel('kanal');
+			} else {
+				// Beklenmedik durum: slash sanıldı ama options yok
+				isSlash = false; // Prefix fallback
+			}
+		}
+		if (!isSlash) {
 			// Prefix kullanım: .logkanal #kanal veya .logkanal kanalID
 			const raw = args && args[0];
 			if (!raw) {

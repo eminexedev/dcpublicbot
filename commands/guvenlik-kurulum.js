@@ -26,7 +26,13 @@ module.exports = {
       }
 
       // Mevcut güvenlik ayarlarını kontrol et
-      const config = getSecurityConfig(ctx.guild.id);
+  let config = getSecurityConfig(ctx.guild.id) || {};
+  // Güvenli normalizasyon (undefined -> [])
+  config.whitelistedRoles = Array.isArray(config.whitelistedRoles) ? config.whitelistedRoles : [];
+  config.exemptUsers = Array.isArray(config.exemptUsers) ? config.exemptUsers : [];
+  if (typeof config.enabled !== 'boolean') config.enabled = false;
+  if (typeof config.banThreshold !== 'number') config.banThreshold = 3;
+  if (!config.punishment) config.punishment = 'jail';
       const jailRoleId = getJailRole(ctx.guild.id);
 
       // Kurulum durumu analizi
@@ -34,7 +40,7 @@ module.exports = {
         jailRole: !!jailRoleId,
         logChannel: !!config.logChannel,
         systemEnabled: config.enabled,
-        hasWhitelist: config.whitelistedRoles.length > 0 || config.exemptUsers.length > 0
+        hasWhitelist: (config.whitelistedRoles.length > 0) || (config.exemptUsers.length > 0)
       };
 
       // Ana kurulum embed'i
