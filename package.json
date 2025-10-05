@@ -4,7 +4,7 @@
   "description": "Gelişmiş moderasyon ve etkileşimli özellikler içeren Discord botu.",
   "main": "index.js",
   "scripts": {
-    "start": "node shard.js",
+    "start": "node index.js",
     "dev": "node --watch index.js",
     "lint": "echo 'ESLint yapılandırması eklenmesi planlanıyor'",
     "test": "echo 'Test yapılandırması eklenmesi planlanıyor'"

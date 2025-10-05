@@ -219,38 +219,37 @@ module.exports = {
 // ========================
 
 // Prefix'i al (varsayılan: '.')
+// Hafif bellek cache: Uygulama ömrü boyunca prefix'leri tut, dosya değiştikçe güncelle.
+let _prefixCache = null;
+function loadPrefixCache() {
+  if (!fs.existsSync(prefixConfigPath)) {
+    _prefixCache = {};
+    return;
+  }
+  try {
+    _prefixCache = JSON.parse(fs.readFileSync(prefixConfigPath, 'utf8')) || {};
+  } catch (e) {
+    console.error('Prefix cache yükleme hatası:', e);
+    _prefixCache = {};
+  }
+}
+function ensurePrefixCache() {
+  if (_prefixCache === null) loadPrefixCache();
+}
 function getPrefix(guildId) {
   if (!guildId) return '.';
-  if (!fs.existsSync(prefixConfigPath)) return '.';
-  try {
-    const data = JSON.parse(fs.readFileSync(prefixConfigPath, 'utf8'));
-    return data[guildId]?.prefix || '.';
-  } catch (error) {
-    console.error('Prefix okuma hatası:', error);
-    return '.';
-  }
+  ensurePrefixCache();
+  return _prefixCache[guildId]?.prefix || '.';
 }
 
 // Prefix'i ayarla
 function setPrefix(guildId, prefix) {
-  let data = {};
-  if (fs.existsSync(prefixConfigPath)) {
-    try {
-      data = JSON.parse(fs.readFileSync(prefixConfigPath, 'utf8'));
-    } catch (error) {
-      console.error('Prefix dosyası okuma hatası:', error);
-      data = {};
-    }
-  }
-  
-  // Mevcut diğer ayarları koru, sadece prefix'i güncelle
-  if (!data[guildId]) {
-    data[guildId] = {};
-  }
-  data[guildId].prefix = prefix;
-  
+  if (!guildId) return;
+  ensurePrefixCache();
+  if (!_prefixCache[guildId]) _prefixCache[guildId] = {};
+  _prefixCache[guildId].prefix = prefix;
   try {
-    fs.writeFileSync(prefixConfigPath, JSON.stringify(data, null, 2));
+    fs.writeFileSync(prefixConfigPath, JSON.stringify(_prefixCache, null, 2));
   } catch (error) {
     console.error('Prefix yazma hatası:', error);
   }

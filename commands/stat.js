@@ -64,19 +64,45 @@ function getRankEmoji(rank) {
 module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('stat')
-		.setDescription('Sunucu istatistiklerini embed olarak gösterir.'),
-	async execute(ctx) {
-		let guild, user, reply;
+		.setDescription('Sunucu istatistiklerini embed olarak gösterir.')
+		.addUserOption(o => o.setName('kullanıcı').setDescription('İstatistiğini görmek istediğin kullanıcı').setRequired(false)),
+	async execute(ctx, args = []) {
+		let guild, invokingUser, reply, isSlash = false;
 		if (ctx.isChatInputCommand && ctx.isChatInputCommand()) {
 			guild = ctx.guild;
-			user = ctx.user;
+			invokingUser = ctx.user;
 			reply = (data) => ctx.reply(data);
+			isSlash = true;
 		} else if (ctx.message) {
 			guild = ctx.guild;
-			user = ctx.message.author;
+			invokingUser = ctx.message.author;
 			reply = (data) => ctx.message.reply(data);
 		} else {
 			return;
+		}
+
+		// Hedef kullanıcı belirleme (prefix: .stat [@etiket|id]) (slash: optional user)
+		let targetUser = invokingUser;
+		if (isSlash) {
+			try {
+				const opt = ctx.options.getUser('kullanıcı');
+				if (opt) targetUser = opt;
+			} catch {}
+		} else {
+			if (args && args.length > 0) {
+				const first = args[0];
+				let id = null;
+				const mentionMatch = first.match(/^<@!?([0-9]{17,20})>$/);
+				if (mentionMatch) id = mentionMatch[1];
+				else if (/^[0-9]{17,20}$/.test(first)) id = first;
+				if (id) {
+					const fetched = guild.members.cache.get(id) || await guild.members.fetch(id).catch(() => null);
+					if (!fetched) return reply('❌ Belirttiğin kullanıcı bulunamadı.');
+					targetUser = fetched.user;
+					// Eğer parametre kullanıcıyı temsil ediyorsa args.shift() yap (gerçek komut içinde başka arg yok ama ilerisi için)
+					args.shift();
+				}
+			}
 		}
 
 		try {
@@ -87,11 +113,11 @@ module.exports = {
 		const stats = loadStats(guild.id);
 		if (!stats) return reply('İstatistik verisi bulunamadı.');
 
-		const member = guild.members.cache.get(user.id);
-		const username = member ? member.displayName : user.username;
+		const member = guild.members.cache.get(targetUser.id);
+		const username = member ? member.displayName : targetUser.username;
 		
 		// Avatar URL'sini gelişmiş seçeneklerle alma
-		const avatarURL = user.displayAvatarURL({ 
+		const avatarURL = targetUser.displayAvatarURL({ 
 			extension: 'png',  // PNG formatında
 			size: 128,         // 128x128 boyut
 			dynamic: true,     // Animasyonlu avatar varsa kullan
@@ -99,8 +125,22 @@ module.exports = {
 		});
 
 		// Kullanıcıya özel mesaj ve ses verileri
-		const userMsgCount = stats.users?.[user.id] || 0;
-		const userVoiceSec = stats.voiceUsers?.[user.id] || 0;
+		const userMsgCount = stats.users?.[targetUser.id] || 0;
+		let userVoiceSec = stats.voiceUsers?.[targetUser.id] || 0; // Kayıtlı (flush edilmiş) süre
+
+		// Aktif oturum delta'sını ekle (flush henüz yapmadıysa)
+		const client = ctx.client || guild.client;
+		if (client && client.activeVoiceStates) {
+			const activeKey = `${guild.id}-${targetUser.id}`;
+			if (client.activeVoiceStates.has(activeKey)) {
+				const state = client.activeVoiceStates.get(activeKey);
+				if (state.joinTime) {
+					const elapsed = Math.floor((Date.now() - state.joinTime) / 1000);
+					const flushed = state._flushed || 0; // voiceStats.js içinde periyodik flush sırasında işaretleniyorsa
+					userVoiceSec += Math.max(0, elapsed - flushed);
+				}
+			}
+		}
 
 		// En çok mesaj atılan kanal
 		const topMsgChannelEntry = Object.entries(stats.channels || {}).sort((a, b) => b[1] - a[1])[0];
@@ -109,30 +149,31 @@ module.exports = {
 		const topMsgChannelName = topMsgChannel ? `#${topMsgChannel.name}` : (topMsgChannelId ? `#silinmiş-kanal (${topMsgChannelId})` : 'Veri yok');
 		const topMsgChannelCount = topMsgChannelEntry?.[1] || 0;
 
-		// En çok sesde kalınan kanal
-		const topVoiceChannelEntry = Object.entries(stats.voiceChannels || {}).sort((a, b) => b[1] - a[1])[0];
-		const topVoiceChannelId = topVoiceChannelEntry?.[0];
-		const topVoiceChannel = topVoiceChannelId ? guild.channels.cache.get(topVoiceChannelId) : null;
-		
-		// Ses kanalı tipini ve ikonunu belirleme
-		let voiceChannelIcon = '🔊';
-		if (topVoiceChannel) {
-			if (topVoiceChannel.type === ChannelType.GuildStageVoice) {
-				voiceChannelIcon = '🎭'; // Sahne kanalı
-			} else if (topVoiceChannel.rtcRegion === 'russia') {
-				voiceChannelIcon = '🎵'; // Müzik kalitesi
-			} else if (topVoiceChannel.videoQualityMode === 1) {
-				voiceChannelIcon = '📹'; // Yüksek video kalitesi
+		// Kullanıcı bazlı mesaj kanal dökümü
+		let messageChannelsList = 'Veri yok';
+		if (stats.userChannelMessages && stats.userChannelMessages[targetUser.id]) {
+			const userMsgChannels = stats.userChannelMessages[targetUser.id];
+			const sortedMsgChannels = Object.entries(userMsgChannels)
+				.sort((a,b) => b[1]-a[1])
+				.slice(0,25);
+			const lines = [];
+			for (const [cid,count] of sortedMsgChannels) {
+				const ch = guild.channels.cache.get(cid);
+				if (!ch) continue;
+				const line = `#️⃣ <#${cid}> — **${count}** mesaj`;
+				if ((lines.join('\n') + '\n' + line).length > 1024) break;
+				lines.push(line);
 			}
+			if (lines.length) messageChannelsList = lines.join('\n');
+			if (messageChannelsList.length > 1024) messageChannelsList = messageChannelsList.slice(0,1000)+'...';
 		}
-		
-		const topVoiceChannelName = topVoiceChannel 
-			? `${voiceChannelIcon} ${topVoiceChannel.name}` 
-			: (topVoiceChannelId ? `${voiceChannelIcon} silinmiş-kanal (${topVoiceChannelId})` : 'Veri yok');
-		const topVoiceChannelSec = topVoiceChannelEntry?.[1] || 0;
+
+		// (Global en aktif ses kanalı yerine) kullanıcı bazlı en aktif ses kanalı daha sonra userVoiceChannels oluşturulduktan sonra hesaplanacak
+		let topVoiceChannelName = 'Veri yok';
+		let topVoiceChannelSec = 0;
 
 		// Kullanıcının anlık ses durumunu kontrol et
-		const currentVoiceState = guild.members.cache.get(user.id)?.voice;
+		const currentVoiceState = guild.members.cache.get(targetUser.id)?.voice;
 		let currentVoiceStatus = '🔴 Ses kanalında değil';
 		let currentChannel = null;
 		let isCurrentlyAFK = false;
@@ -151,14 +192,14 @@ module.exports = {
 		if (afkChannelId) {
 			const afkChannel = guild.channels.cache.get(afkChannelId);
 			afkChannelName = afkChannel ? `🔕 ${afkChannel.name}` : `🔕 silinmiş-kanal (${afkChannelId})`;
-			if (stats.afkVoiceUsers && typeof stats.afkVoiceUsers[user.id] === 'number') {
-				userAfkSec = stats.afkVoiceUsers[user.id];
+			if (stats.afkVoiceUsers && typeof stats.afkVoiceUsers[targetUser.id] === 'number') {
+				userAfkSec = stats.afkVoiceUsers[targetUser.id];
 			}
 			
 			// Kullanıcı şu anda AFK kanalındaysa, aktif süreyi ekle
-			const client = ctx.client || ctx.guild.client;
-			if (isCurrentlyAFK && client && client.activeVoiceStates && client.activeVoiceStates.has(`${guild.id}-${user.id}`)) {
-				const joinTime = client.activeVoiceStates.get(`${guild.id}-${user.id}`).joinTime;
+			const client2 = ctx.client || ctx.guild.client;
+			if (isCurrentlyAFK && client2 && client2.activeVoiceStates && client2.activeVoiceStates.has(`${guild.id}-${targetUser.id}`)) {
+				const joinTime = client2.activeVoiceStates.get(`${guild.id}-${targetUser.id}`).joinTime;
 				const currentAfkSessionTime = Math.floor((Date.now() - joinTime) / 1000);
 				userAfkSec += currentAfkSessionTime;
 			}
@@ -189,12 +230,12 @@ module.exports = {
 		}
 
 		// Kullanıcının ses kanalı sırasını bulma
-		const userVoiceRank = getUserVoiceRank(stats, user.id);
+		const userVoiceRank = getUserVoiceRank(stats, targetUser.id);
 		
 		// Kullanıcının ses kanalında ne kadar süredir olduğunu hesaplama
 		let currentSessionDuration = 'Bağlı değil';
-		if (currentChannel && stats.voiceSessions && stats.voiceSessions[user.id]) {
-			const userSessions = stats.voiceSessions[user.id];
+		if (currentChannel && stats.voiceSessions && stats.voiceSessions[targetUser.id]) {
+			const userSessions = stats.voiceSessions[targetUser.id];
 			const currentSession = userSessions.find(s => s.channelId === currentChannel.id && !s.endTime);
 			if (currentSession) {
 				const sessionDuration = Math.floor((Date.now() - currentSession.startTime) / 1000);
@@ -210,9 +251,9 @@ module.exports = {
 		const userVoiceChannels = new Map();
 		
 		// Kullanıcı bazlı ses verilerini kontrol et (güncel veri yapısı)
-		if (stats.userVoiceData && stats.userVoiceData[user.id]) {
+		if (stats.userVoiceData && stats.userVoiceData[targetUser.id]) {
 			// Kullanıcının kanal verilerini al
-			const userChannels = stats.userVoiceData[user.id];
+			const userChannels = stats.userVoiceData[targetUser.id];
 			for (const [channelId, duration] of Object.entries(userChannels)) {
 				const channel = guild.channels.cache.get(channelId);
 				if (channel) {
@@ -264,9 +305,9 @@ module.exports = {
 		
 		// Kullanıcının aktif ses oturumu varsa ekle
 		if (currentChannel && currentVoiceState) {
-			const client = ctx.client || ctx.guild.client;
-			if (client && client.activeVoiceStates && client.activeVoiceStates.has(`${guild.id}-${user.id}`)) {
-				const joinTime = client.activeVoiceStates.get(`${guild.id}-${user.id}`).joinTime;
+			const client3 = ctx.client || ctx.guild.client;
+			if (client3 && client3.activeVoiceStates && client3.activeVoiceStates.has(`${guild.id}-${targetUser.id}`)) {
+				const joinTime = client3.activeVoiceStates.get(`${guild.id}-${targetUser.id}`).joinTime;
 				const currentSessionTime = Math.floor((Date.now() - joinTime) / 1000);
 				
 				// Mevcut kanalı haritaya ekle ya da güncelle
@@ -292,13 +333,19 @@ module.exports = {
 			.sort((a, b) => b.duration - a.duration)
 			.slice(0, 25); // Ham listede maksimum 25 (sonra 1024 sınırına göre keseceğiz)
 
+		// Kullanıcı bazlı en aktif ses kanalı (ilk eleman)
+		if (sortedChannels.length > 0) {
+			const ch = sortedChannels[0];
+			topVoiceChannelName = `${ch.name}`;
+			topVoiceChannelSec = ch.duration;
+		}
+
 		// Satırları önce diziye koy, sonra 1024 sınırına göre birleştir
 		const channelLines = [];
 		for (const channel of sortedChannels) {
-			let channelIcon = '🔊';
-			if (channel.type === ChannelType.GuildStageVoice) channelIcon = '🎭';
-			const currentIndicator = channel.current ? ' `✓`' : '';
-			channelLines.push(`${channelIcon} [${channel.name}](https://discord.com/channels/${guild.id}/${channel.id})${currentIndicator} - ${formatTime(channel.duration)}`);
+			const currentIndicator = channel.current ? ' • canlı' : '';
+			const tag = channel.estimated ? '*(tahmini)*' : '';
+			channelLines.push(`<#${channel.id}>${currentIndicator} — **${formatTime(channel.duration)}** ${tag}`.trim());
 		}
 
 		if (userVoiceChannels.size > sortedChannels.length) {
@@ -326,9 +373,9 @@ module.exports = {
 			if (!val) return 'Veri yok';
 			return val.length <= 1024 ? val : (val.slice(0, 1000) + '...');
 		};
-		
+
 		const embed = new EmbedBuilder()
-			.setAuthor({ name: `${username} (${user.id}) üyesinin istatistikleri`, iconURL: avatarURL })
+			.setAuthor({ name: `${username} (${targetUser.id}) üyesinin istatistikleri`, iconURL: avatarURL })
 			.setColor('#5865F2')
 			.addFields(
 				{
@@ -337,6 +384,10 @@ module.exports = {
 						`Toplam Mesaj: **${userMsgCount}**\n` +
 						`En Aktif Kanal: ${topMsgChannelName} (${topMsgChannelCount ? topMsgChannelCount + ' mesaj' : 'Veri yok'})`
 					)
+				},
+				{
+					name: 'Mesaj Kanalları',
+					value: messageChannelsList
 				},
 				{
 					name: 'Ses Bilgileri',
@@ -355,7 +406,6 @@ module.exports = {
 					value: safeField(`${afkChannelName} (AFK)\nAFK Süresi: ${userAfkSec ? formatTime(userAfkSec) : 'Veri yok'}`)
 				}
 			)
-			.setFooter({ text: 'Detaylı istatistik için .stat yazınız.' });
 
 		await reply({ embeds: [embed] });
 	}

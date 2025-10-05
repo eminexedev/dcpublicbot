@@ -4,101 +4,102 @@ const { getPrefix, setPrefix } = require('../config');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('prefix')
-    .setDescription('Sunucu prefix\'ini ayarlar veya görüntüler.')
-    .addStringOption(option =>
-      option.setName('yeni_prefix')
-        .setDescription('Ayarlanacak yeni prefix (boş bırakırsanız mevcut prefix gösterilir)')
+    .setDescription('Sunucu prefix\'ini gösterir veya değiştirir')
+    .addStringOption(o =>
+      o.setName('yeni')
+        .setDescription('Yeni prefix (1-5 karakter)')
+        .setMinLength(1)
+        .setMaxLength(5)
         .setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-  
-  async execute(interaction) {
-    const currentPrefix = getPrefix(interaction.guild.id);
-    const newPrefix = interaction.options.getString('yeni_prefix');
-    
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+
+  name: 'prefix',
+  description: 'Prefix görüntüle/değiştir (slash + prefix)',
+  usage: '/prefix [yeni] veya <mevcutPrefix>prefix [yeni]',
+  permissions: [PermissionFlagsBits.ManageGuild],
+
+  async execute(ctx, args) {
+    // Slash mı prefix mi?
+    let isSlash = false;
+    try { if (typeof ctx.isChatInputCommand === 'function' && ctx.isChatInputCommand()) isSlash = true; } catch {}
+
+    const guild = ctx.guild || (ctx.message && ctx.message.guild);
+    if (!guild) {
+      const msg = 'Sunucu bağlamı bulunamadı.';
+      return isSlash ? ctx.reply({ content: msg, ephemeral: true }) : ctx.reply(msg);
+    }
+
+    const current = getPrefix(guild.id);
+
+    // Yetki kontrolü sadece değiştirme yapılacaksa gerek
+    const member = guild.members.cache.get(isSlash ? ctx.user.id : ctx.author.id);
+    const hasPerm = member?.permissions.has(PermissionFlagsBits.ManageGuild);
+
+    let newPrefix = null;
+    if (isSlash) {
+      if (ctx.options && typeof ctx.options.getString === 'function') {
+        newPrefix = ctx.options.getString('yeni');
+      }
+    } else {
+      // Prefix çağrısı: args bekleniyor (commandHandler args gönderiyor)
+      if (Array.isArray(args) && args.length > 0) {
+        newPrefix = args[0];
+      }
+    }
+
+    // Sadece göster
     if (!newPrefix) {
-      // Mevcut prefix'i göster
-      const infoEmbed = new EmbedBuilder()
-        .setColor('#5865F2')
-        .setTitle('📝 Sunucu Prefix Bilgisi')
-        .setDescription(`**${interaction.guild.name}** sunucusunun mevcut prefix'i:`)
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('📝 Prefix Bilgisi')
+        .setDescription(`Mevcut prefix: \`${current}\``)
         .addFields(
-          {
-            name: '🔖 Mevcut Prefix',
-            value: `\`${currentPrefix}\``,
-            inline: true
-          },
-          {
-            name: '📋 Örnek Kullanım',
-            value: `\`${currentPrefix}ban @kullanıcı\`\n\`${currentPrefix}kick @kullanıcı\``,
-            inline: true
-          },
-          {
-            name: '⚙️ Prefix Değiştirme',
-            value: '`/prefix yeni_prefix:[prefix]`',
-            inline: false
-          }
+          { name: 'Örnekler', value: `\`${current}ban @kullanıcı\`\n\`${current}kick @kullanıcı\``, inline: true },
+          { name: 'Değiştirme (Slash)', value: '`/prefix yeni:<prefix>`', inline: true },
+          { name: 'Değiştirme (Prefix)', value: `\`${current}prefix !\``, inline: false }
         )
-        .setFooter({ 
-          text: `${interaction.guild.name} • Prefix sistemi`, 
-          iconURL: interaction.guild.iconURL() 
-        })
+        .setFooter({ text: guild.name, iconURL: guild.iconURL() })
         .setTimestamp();
-
-      return interaction.reply({ embeds: [infoEmbed], ephemeral: true });
+      return isSlash ? ctx.reply({ embeds: [embed], ephemeral: true }) : ctx.reply({ embeds: [embed] });
     }
 
-    // Yeni prefix'i ayarla
-    if (newPrefix.length > 5) {
-      return interaction.reply({
-        content: '❌ Prefix en fazla 5 karakter olabilir.',
-        ephemeral: true
-      });
+    // Yetki kontrolü
+    if (!hasPerm) {
+      const msg = '❌ Prefix değiştirmek için "Sunucuyu Yönet" izni gerekir.';
+      return isSlash ? ctx.reply({ content: msg, ephemeral: true }) : ctx.reply(msg);
     }
 
-    if (newPrefix.includes(' ')) {
-      return interaction.reply({
-        content: '❌ Prefix boşluk karakteri içeremez.',
-        ephemeral: true
-      });
+    newPrefix = newPrefix.trim();
+    if (newPrefix.length < 1 || newPrefix.length > 5) {
+      const msg = '❌ Prefix uzunluğu 1-5 karakter olmalı.';
+      return isSlash ? ctx.reply({ content: msg, ephemeral: true }) : ctx.reply(msg);
+    }
+    if (/\s/.test(newPrefix)) {
+      const msg = '❌ Prefix boşluk içeremez.';
+      return isSlash ? ctx.reply({ content: msg, ephemeral: true }) : ctx.reply(msg);
+    }
+    if (newPrefix === current) {
+      const msg = '❌ Girdiğin prefix zaten kullanılıyor.';
+      return isSlash ? ctx.reply({ content: msg, ephemeral: true }) : ctx.reply(msg);
     }
 
     try {
-      setPrefix(interaction.guild.id, newPrefix);
-
-      const successEmbed = new EmbedBuilder()
-        .setColor('#00FF00')
-        .setTitle('✅ Prefix Başarıyla Değiştirildi')
-        .setDescription(`**${interaction.guild.name}** sunucusunun prefix'i güncellendi.`)
+      setPrefix(guild.id, newPrefix);
+      const embed = new EmbedBuilder()
+        .setColor(0x57F287)
+        .setTitle('✅ Prefix Güncellendi')
         .addFields(
-          {
-            name: '🔖 Eski Prefix',
-            value: `\`${currentPrefix}\``,
-            inline: true
-          },
-          {
-            name: '🆕 Yeni Prefix',
-            value: `\`${newPrefix}\``,
-            inline: true
-          },
-          {
-            name: '📋 Örnek Kullanım',
-            value: `\`${newPrefix}ban @kullanıcı\`\n\`${newPrefix}kick @kullanıcı\``,
-            inline: false
-          }
+          { name: 'Eski', value: `\`${current}\``, inline: true },
+          { name: 'Yeni', value: `\`${newPrefix}\``, inline: true },
+          { name: 'Örnekler', value: `\`${newPrefix}ban @kullanıcı\`\n\`${newPrefix}kick @kullanıcı\``, inline: false }
         )
-        .setFooter({ 
-          text: `${interaction.guild.name} • Prefix sistemi güncellendi`, 
-          iconURL: interaction.guild.iconURL() 
-        })
+        .setFooter({ text: guild.name, iconURL: guild.iconURL() })
         .setTimestamp();
-
-      return interaction.reply({ embeds: [successEmbed], ephemeral: true });
-    } catch (error) {
-      console.error('Prefix ayarlama hatası:', error);
-      return interaction.reply({
-        content: '❌ Prefix ayarlanırken bir hata oluştu.',
-        ephemeral: true
-      });
+      return isSlash ? ctx.reply({ embeds: [embed], ephemeral: true }) : ctx.reply({ embeds: [embed] });
+    } catch (err) {
+      console.error('Prefix ayarlama hatası:', err);
+      const msg = '❌ Prefix ayarlanırken bir hata oluştu.';
+      return isSlash ? ctx.reply({ content: msg, ephemeral: true }) : ctx.reply(msg);
     }
   }
 };
