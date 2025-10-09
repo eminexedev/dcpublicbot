@@ -30,7 +30,6 @@ module.exports = {
             value: 'Kayıt işlemleri yapıldıkça burada istatistikler görünecek.',
             inline: false
           })
-          .setFooter({ text: 'İstatistikler gerçek zamanlı güncellenir' })
           .setTimestamp();
 
         return ctx.reply({ embeds: [noStatsEmbed] });

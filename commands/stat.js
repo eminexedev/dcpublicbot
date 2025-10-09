@@ -128,17 +128,16 @@ module.exports = {
 		const userMsgCount = stats.users?.[targetUser.id] || 0;
 		let userVoiceSec = stats.voiceUsers?.[targetUser.id] || 0; // Kayıtlı (flush edilmiş) süre
 
-		// Aktif oturum delta'sını ekle (flush henüz yapmadıysa)
+		// Aktif oturum delta'sı: sadece embed'de gösterilecek, userVoiceSec'e direkt eklemiyoruz (aksi halde kanal bazlı eklemede double count olur)
+		let liveSessionExtra = 0;
 		const client = ctx.client || guild.client;
 		if (client && client.activeVoiceStates) {
 			const activeKey = `${guild.id}-${targetUser.id}`;
-			if (client.activeVoiceStates.has(activeKey)) {
-				const state = client.activeVoiceStates.get(activeKey);
-				if (state.joinTime) {
-					const elapsed = Math.floor((Date.now() - state.joinTime) / 1000);
-					const flushed = state._flushed || 0; // voiceStats.js içinde periyodik flush sırasında işaretleniyorsa
-					userVoiceSec += Math.max(0, elapsed - flushed);
-				}
+			const state = client.activeVoiceStates.get(activeKey);
+			if (state && state.joinTime) {
+				const elapsed = Math.floor((Date.now() - state.joinTime) / 1000);
+				const flushed = state._flushed || 0;
+				liveSessionExtra = Math.max(0, elapsed - flushed);
 			}
 		}
 
@@ -160,7 +159,7 @@ module.exports = {
 			for (const [cid,count] of sortedMsgChannels) {
 				const ch = guild.channels.cache.get(cid);
 				if (!ch) continue;
-				const line = `#️⃣ <#${cid}> — **${count}** mesaj`;
+				const line = `<#${cid}> — **${count}** mesaj`;
 				if ((lines.join('\n') + '\n' + line).length > 1024) break;
 				lines.push(line);
 			}
@@ -191,7 +190,8 @@ module.exports = {
 		// Kayıtlı AFK süresi
 		if (afkChannelId) {
 			const afkChannel = guild.channels.cache.get(afkChannelId);
-			afkChannelName = afkChannel ? `🔕 ${afkChannel.name}` : `🔕 silinmiş-kanal (${afkChannelId})`;
+			// AFK kanalı da diğer ses kanalları gibi mention formatında gösterilsin
+			afkChannelName = afkChannel ? `<#${afkChannel.id}>` : `silinmiş-kanal (${afkChannelId})`;
 			if (stats.afkVoiceUsers && typeof stats.afkVoiceUsers[targetUser.id] === 'number') {
 				userAfkSec = stats.afkVoiceUsers[targetUser.id];
 			}
@@ -308,7 +308,10 @@ module.exports = {
 			const client3 = ctx.client || ctx.guild.client;
 			if (client3 && client3.activeVoiceStates && client3.activeVoiceStates.has(`${guild.id}-${targetUser.id}`)) {
 				const joinTime = client3.activeVoiceStates.get(`${guild.id}-${targetUser.id}`).joinTime;
-				const currentSessionTime = Math.floor((Date.now() - joinTime) / 1000);
+				const state = client3.activeVoiceStates.get(`${guild.id}-${targetUser.id}`);
+				const elapsed = Math.floor((Date.now() - joinTime) / 1000);
+				const flushed = state._flushed || 0;
+				const currentSessionTime = Math.max(0, elapsed - flushed);
 				
 				// Mevcut kanalı haritaya ekle ya da güncelle
 				if (userVoiceChannels.has(currentChannel.id)) {
@@ -374,6 +377,7 @@ module.exports = {
 			return val.length <= 1024 ? val : (val.slice(0, 1000) + '...');
 		};
 
+		const totalVoiceDisplay = formatTime(userVoiceSec + liveSessionExtra);
 		const embed = new EmbedBuilder()
 			.setAuthor({ name: `${username} (${targetUser.id}) üyesinin istatistikleri`, iconURL: avatarURL })
 			.setColor('#5865F2')
@@ -392,7 +396,7 @@ module.exports = {
 				{
 					name: 'Ses Bilgileri',
 					value: safeField(
-						`Toplam Ses: **${formatTime(userVoiceSec)}**\n` +
+						`Toplam Ses: **${totalVoiceDisplay}**${liveSessionExtra ? ' *(canlı)*' : ''}\n` +
 						`En Aktif Ses Kanalı: ${topVoiceChannelName} (${topVoiceChannelSec ? formatTime(topVoiceChannelSec) : 'Veri yok'})\n` +
 						`Ses Sıralaması: ${userVoiceRank}`
 					)

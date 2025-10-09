@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { Collection, Events } = require('discord.js');
+const { Collection, Events, AuditLogEvent } = require('discord.js');
 
 module.exports = (client) => {
   client.commands = new Collection();
@@ -39,14 +39,23 @@ module.exports = (client) => {
   //   }
   // }
 
-  // Log kanalını almak için örnek fonksiyon (her sunucu için)
+  // Log kanalını almak için merkezi config fonksiyonlarını kullan
+  // Öncelik: Ayarlanmış genel log (logConfig.json) -> prefixConfig (legacy) -> autoLog
+  const { getLogChannel: _getGeneralLog, getAutoLogChannel: _getAutoLog } = require('./config');
   function getLogChannelId(guildId) {
+    if (!guildId) return null;
+    // 1. Genel log kanalı (logkanal komutu ile kaydedilen)
+    const general = _getGeneralLog(guildId);
+    if (general) return general;
+    // 2. Legacy prefixConfig.json (geriye dönük uyumluluk)
     try {
-      const config = require('./prefixConfig.json');
-      return config[guildId]?.logChannelId;
-    } catch {
-      return null;
-    }
+      const legacy = require('./prefixConfig.json');
+      if (legacy[guildId]?.logChannelId) return legacy[guildId].logChannelId;
+    } catch {}
+    // 3. Otomatik oluşturulan log kanalı
+    const auto = _getAutoLog(guildId);
+    if (auto) return auto;
+    return null;
   }
 
   client.on(Events.InteractionCreate, async interaction => {
@@ -249,7 +258,10 @@ module.exports = (client) => {
         'mesajsil': 'sil',
         'sil': 'sil',
         'clear': 'sil',
-        'purge': 'sil'
+        'purge': 'sil',
+        'çek': 'cek',
+        'cek': 'cek',
+        'rolbilgi': 'rolbilgi'
       };
       const altName = alternativeNames[commandName];
       if (altName) {
@@ -343,6 +355,8 @@ module.exports = (client) => {
   // Mesaj silindiğinde logla
   client.on(Events.MessageDelete, async message => {
     if (!message.guild) return;
+    // Debug: event geldi
+    // console.debug('[LOG][MessageDelete] Event tetiklendi, id:', message.id, 'partial:', message.partial);
     // Mesaj eksikse fetch et
     if (message.partial) {
       try {
@@ -351,20 +365,115 @@ module.exports = (client) => {
         // fetch başarısız olursa devam et
       }
     }
-    if (message.author?.bot) return;
+    const wasBot = message.author?.bot === true;
     const logChannelId = getLogChannelId(message.guild.id);
-    if (!logChannelId) return;
+    if (!logChannelId) {
+      console.debug('[LOG][MessageDelete] Log kanalı tanımlı değil:', message.guild.id);
+      return;
+    }
     const logChannel = message.guild.channels.cache.get(logChannelId);
+    if (!logChannel) {
+      console.debug('[LOG][MessageDelete] Log kanalı bulunamadı veya cache dışı:', logChannelId);
+      return;
+    }
+    // Temel alanları topla (audit log gecikmesini beklemek için henüz göndermiyoruz)
+    const baseFields = [
+      { name: 'Kullanıcı', value: message.author ? `${message.author} (${message.author.id})` : 'Bilinmiyor', inline: true },
+      { name: 'Kanal', value: message.channel ? `<#${message.channel.id}>` : 'Bilinmiyor', inline: true },
+      { name: 'Mesaj', value: message.content ? message.content : '(Bilinmiyor veya embed/boş mesaj)' }
+    ];
+    if (wasBot) baseFields.push({ name: 'Not', value: 'Silinen mesaj bir bot tarafından gönderilmişti.', inline: false });
+
+    // Sağ tık silmeler: audit log gecikebilir -> 2 aşamalı deneme (650ms + 650ms)
+    const MAX_WINDOW_MS = 10000; // 10 sn pencere
+    let sent = false;
+
+    async function tryResolve(attempt) {
+      let deleter = null;
+      let auditTried = false;
+      try {
+        const fetchedLogs = await message.guild.fetchAuditLogs({ type: AuditLogEvent.MessageDelete, limit: 8 });
+        const now = Date.now();
+        const entries = [...fetchedLogs.entries.values()].filter(e => (now - e.createdTimestamp) < MAX_WINDOW_MS);
+        auditTried = true;
+        // Kanal filtresi (extra.channel.id mevcutsa)
+        const channelFiltered = entries.filter(e => {
+          const ch = e.extra?.channel;
+          return ch && message.channel && ch.id === message.channel.id;
+        });
+        // Hedef kullanıcı ID eşleşmesi öncelik
+        let candidates = channelFiltered.length ? channelFiltered : entries;
+        if (message.author) {
+          const exact = candidates
+            .filter(e => e.target && e.target.id === message.author.id)
+            .sort((a,b) => b.createdTimestamp - a.createdTimestamp)[0];
+          if (exact) {
+            deleter = exact.executor;
+          } else {
+            // Tek aday & count===1 ise varsayım
+            const single = candidates
+              .filter(e => e.extra && e.extra.count === 1 && e.target && e.target.id === message.author.id)
+              .sort((a,b)=> b.createdTimestamp - a.createdTimestamp)[0];
+            if (single) deleter = single.executor;
+          }
+        }
+      } catch (e) {
+        // yoksay
+      }
+
+      if (deleter || attempt === 2) {
+        if (sent) return; // Güvenlik
+        sent = true;
+        const finalFields = [...baseFields];
+        if (deleter) {
+          finalFields.push({ name: 'Silen', value: `${deleter} (${deleter.id})`, inline: true });
+        } else {
+          // Audit denenmiş ve bulunamamışsa muhtemelen self-delete
+          if (auditTried && message.author) {
+            finalFields.push({ name: 'Silen', value: `${message.author} (${message.author.id}) (self)`, inline: true });
+          } else {
+            finalFields.push({ name: 'Silen', value: 'Belirlenemedi (muhtemelen self-delete veya audit gecikmesi)', inline: false });
+          }
+        }
+        logChannel.send({
+          embeds: [{
+            title: 'Mesaj Silindi',
+            color: 0xED4245,
+            fields: finalFields,
+            timestamp: new Date()
+          }]
+        });
+      } else {
+        // İkinci deneme için tekrar sırala
+        setTimeout(() => tryResolve(2), 650);
+      }
+    }
+
+    setTimeout(() => tryResolve(1), 650);
+  });
+
+  // Toplu mesaj silme (ör: purge) logu
+  client.on(Events.MessageBulkDelete, async messages => {
+    if (!messages || messages.size === 0) return;
+    const sample = messages.first();
+    if (!sample?.guild) return;
+    const logChannelId = getLogChannelId(sample.guild.id);
+    if (!logChannelId) return;
+    const logChannel = sample.guild.channels.cache.get(logChannelId);
     if (!logChannel) return;
+
+    // Kaç farklı kullanıcı mesajı silindi
+    const authors = new Set();
+    messages.forEach(m => { if (m.author && !m.author.bot) authors.add(m.author.id); });
 
     logChannel.send({
       embeds: [{
-        title: 'Mesaj Silindi',
+        title: 'Toplu Mesaj Silme',
         color: 0xED4245,
         fields: [
-          { name: 'Kullanıcı', value: message.author ? `${message.author} (${message.author.id})` : 'Bilinmiyor', inline: true },
-          { name: 'Kanal', value: `<#${message.channel.id}>`, inline: true },
-          { name: 'Mesaj', value: message.content ? message.content : '(Bilinmiyor veya embed/boş mesaj)' }
+          { name: 'Silinen Mesaj Sayısı', value: String(messages.size), inline: true },
+          { name: 'Etkilenen Kullanıcı', value: authors.size > 0 ? String(authors.size) : 'Bilinmiyor', inline: true },
+          { name: 'Kanal', value: `<#${sample.channel.id}>`, inline: true }
         ],
         timestamp: new Date()
       }]
@@ -375,29 +484,60 @@ module.exports = (client) => {
   client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
     if (!oldMessage.guild) return;
     // Eski veya yeni mesaj eksikse fetch et
-    if (oldMessage.partial) {
-      try { await oldMessage.fetch(); } catch {}
-    }
-    if (newMessage.partial) {
-      try { await newMessage.fetch(); } catch {}
-    }
+    if (oldMessage.partial) { try { await oldMessage.fetch(); } catch {} }
+    if (newMessage.partial) { try { await newMessage.fetch(); } catch {} }
     if (oldMessage.author?.bot) return;
-    if (oldMessage.content === newMessage.content) return;
+
+    const oldContent = oldMessage.content || '';
+    const newContent = newMessage.content || '';
+    const attachmentsChanged = (oldMessage.attachments?.size || 0) !== (newMessage.attachments?.size || 0);
+    // İçerik değişmediyse ve ek sayısı da değişmediyse loglama
+    if (oldContent === newContent && !attachmentsChanged) return;
+
     const logChannelId = getLogChannelId(oldMessage.guild.id);
-    if (!logChannelId) return;
+    if (!logChannelId) {
+      console.debug('[LOG][MessageUpdate] Log kanalı tanımlı değil:', oldMessage.guild.id);
+      return;
+    }
     const logChannel = oldMessage.guild.channels.cache.get(logChannelId);
-    if (!logChannel) return;
+    if (!logChannel) {
+      console.debug('[LOG][MessageUpdate] Log kanalı bulunamadı veya cache dışı:', logChannelId);
+      return;
+    }
+
+    // Uzun içerikleri kes (1024 embed field limiti güvenliği)
+    const truncate = (txt) => {
+      if (!txt) return '(Boş)';
+      return txt.length > 900 ? txt.slice(0,900) + '... (kısaltıldı)' : txt;
+    };
+
+    const oldDisplay = truncate(oldContent) || '(Bilinmiyor veya embed/boş mesaj)';
+    const newDisplay = truncate(newContent) || '(Bilinmiyor veya embed/boş mesaj)';
+
+    // Ek listesi farkı
+    const oldAtt = oldMessage.attachments?.map(a=>a.name).join(', ') || 'Yok';
+    const newAtt = newMessage.attachments?.map(a=>a.name).join(', ') || 'Yok';
+    const attFieldNeeded = oldAtt !== newAtt;
+
+    const messageLink = `https://discord.com/channels/${oldMessage.guild.id}/${oldMessage.channel.id}/${oldMessage.id}`;
+
+    const fields = [
+      { name: 'Kullanıcı', value: oldMessage.author ? `${oldMessage.author} (${oldMessage.author.id})` : 'Bilinmiyor', inline: true },
+      { name: 'Kanal', value: `<#${oldMessage.channel.id}>`, inline: true },
+      { name: 'Mesaj Linki', value: `[Git](${messageLink})`, inline: true },
+      { name: 'Eski Mesaj', value: oldDisplay },
+      { name: 'Yeni Mesaj', value: newDisplay }
+    ];
+    if (attFieldNeeded) {
+      fields.push({ name: 'Ekler (Önce)', value: oldAtt, inline: false });
+      fields.push({ name: 'Ekler (Sonra)', value: newAtt, inline: false });
+    }
 
     logChannel.send({
       embeds: [{
         title: 'Mesaj Düzenlendi',
         color: 0xFEE75C,
-        fields: [
-          { name: 'Kullanıcı', value: oldMessage.author ? `${oldMessage.author} (${oldMessage.author.id})` : 'Bilinmiyor', inline: true },
-          { name: 'Kanal', value: `<#${oldMessage.channel.id}>`, inline: true },
-          { name: 'Eski Mesaj', value: oldMessage.content ? oldMessage.content : '(Bilinmiyor veya embed/boş mesaj)' },
-          { name: 'Yeni Mesaj', value: newMessage.content ? newMessage.content : '(Bilinmiyor veya embed/boş mesaj)' }
-        ],
+        fields,
         timestamp: new Date()
       }]
     });
