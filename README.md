@@ -42,7 +42,7 @@ Gelişmiş moderasyon ve etkileşimli özellikler içeren Discord botu.
 
 1. **Repository'yi klonlayın**
 ```bash
-git clone https://github.com/yourusername/dcpublicbot.git
+git clone https://github.com/eminexedev/dcpublicbot.git
 cd dcpublicbot
 ```
 
