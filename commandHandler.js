@@ -134,6 +134,19 @@ module.exports = (client) => {
         }
       }
     }
+    // rollog sayfalama butonları
+    if (interaction.isButton && typeof interaction.isButton === 'function' ? interaction.isButton() : interaction.isButton) {
+      if (interaction.customId && interaction.customId.startsWith('rollog:')) {
+        const rollog = client.commands.get('rollog');
+        if (rollog && rollog.handleButton) {
+          try {
+            await rollog.handleButton(interaction);
+          } catch (e) {
+            console.error('[ROLLOG BUTTON ERROR]', e);
+          }
+        }
+      }
+    }
     // Prefix seçim menüsü
     if (
       (interaction.isStringSelectMenu && interaction.customId === 'prefix_select') ||
