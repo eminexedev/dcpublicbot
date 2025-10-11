@@ -262,7 +262,8 @@ module.exports = (client) => {
         'çek': 'cek',
         'cek': 'cek',
         'rolbilgi': 'rolbilgi',
-        'sleep': 'sleep'
+        'sleep': 'sleep',
+        'rollog': 'rollog'
       };
       // Kısa yol aliasları
       if (!command && (commandName === 'n' || commandName === 'nerede')) {

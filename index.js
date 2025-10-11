@@ -134,6 +134,9 @@ async function deployCommands() {
 // Voice stats event handler'ını ekle
 require('./events/voiceStats')(client);
 
+// Role change logger event handler'ını ekle
+require('./events/roleLogger')(client);
+
 // Template interactions event handler'ını ekle
 require('./events/templateInteractions')(client);
 
