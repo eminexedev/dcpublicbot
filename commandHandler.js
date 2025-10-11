@@ -261,8 +261,13 @@ module.exports = (client) => {
         'purge': 'sil',
         'çek': 'cek',
         'cek': 'cek',
-        'rolbilgi': 'rolbilgi'
+        'rolbilgi': 'rolbilgi',
+        'sleep': 'sleep'
       };
+      // Kısa yol aliasları
+      if (!command && (commandName === 'n' || commandName === 'nerede')) {
+        command = client.commands.get('nerede');
+      }
       const altName = alternativeNames[commandName];
       if (altName) {
         command = client.commands.get(altName);
