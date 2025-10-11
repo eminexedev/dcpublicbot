@@ -54,18 +54,13 @@ async function updateStatsChannels(guild) {
 
 client.on('guildMemberAdd', member => updateStatsChannels(member.guild));
 client.on('guildMemberRemove', member => updateStatsChannels(member.guild));
-// DİKKAT: 'clientReady' değil 'ready' event'i kullanılmalı
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   console.log('✅ Client ready event tetiklendi. Giriş yapan bot:', client.user?.tag);
   console.log('🔍 Aktif intentler:', client.options.intents.bitfield?.toString());
-  // Durumları gösteren ready.js'i çağır
   const { getPrefix } = require('./config');
   require('./events/ready')(client, getPrefix);
 
-  // İstatistik kanallarını güncelle
   client.guilds.cache.forEach(guild => updateStatsChannels(guild));
-
-  // Komutları deploy et
   await deployCommands();
 });
 

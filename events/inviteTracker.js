@@ -43,20 +43,18 @@ async function handleMemberJoin(member) {
     }
   }
 
-  // Eğer davet kullanıldıktan sonra maksimum kullanıma ulaşıp silindiyse (artık newInvites içinde yoksa) eski listeden çıkartılarak tespit etmeye çalış
+
   if (!usedInvite) {
     for (const [code, oldInvite] of oldInvites) {
       if (!newInvites.has(code)) {
-        // Davet silinmiş: muhtemelen maxUses'a ulaştı veya elle silindi. Eski invite bilgisini kullan.
         usedInvite = oldInvite;
         break;
       }
     }
   }
 
-  // Vanity URL durumunda invites listesinde artış olmayabilir
-  const isVanity = guild.vanityURLCode ? true : false;
 
+  const isVanity = guild.vanityURLCode ? true : false;
   // Hesap oluşturulma tarihi
   const createdAt = `<t:${Math.floor(member.user.createdTimestamp/1000)}:f> (<t:${Math.floor(member.user.createdTimestamp/1000)}:R>)`;
   // Anlık üye sayısı
@@ -78,7 +76,6 @@ async function handleMemberLeave(member) {
   const logChannel = guild.channels.cache.get(logChannelId);
   if (!logChannel) return;
 
-  // Son kullanılan daveti bul (invite cache mantığı gereği kesin tespit mümkün değildir, sadece log)
   const invites = invitesCache.get(guild.id);
   let lastInviter = 'Bilinmiyor';
   if (invites) {
@@ -100,11 +97,9 @@ async function handleMemberLeave(member) {
 }
 
 function setupInviteTracking(client) {
-  // Doğru event 'ready'
-  client.on('ready', () => {
+  client.on('clientReady', () => {
     client.guilds.cache.forEach(guild => cacheGuildInvites(guild));
   });
-  // Sunucuya yeni katılınca cache'i güncelle
   client.on('guildCreate', (guild) => {
     setTimeout(() => cacheGuildInvites(guild), 3000); // Biraz gecikme ile (invites oluşsun)
   });

@@ -71,11 +71,11 @@ module.exports = {
                 const { userId, messageCount } = userStats[i];
                 
                 try {
-                    const user = await ctx.guild.members.fetch(userId);
+                    const member = await ctx.guild.members.fetch(userId);
                     const medal = i < 3 ? medals[i] : `${i + 1}.`;
-                    const displayName = user.displayName || user.user.username;
-                    
-                    description += `${medal} **${displayName}** - \`${messageCount.toLocaleString()}\` mesaj\n`;
+                    const mention = member.toString(); // <@id>
+
+                    description += `${medal} ${mention} - \`${messageCount.toLocaleString()}\` mesaj\n`;
                 } catch (error) {
                     // Kullanıcı sunucudan ayrılmış olabilir
                     const medal = i < 3 ? medals[i] : `${i + 1}.`;
