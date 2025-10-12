@@ -17,7 +17,6 @@ module.exports = {
       reply = (msg) => ctx.reply(msg);
     } else if (ctx.message) {
       guild = ctx.guild;
-      // .davetlog #kanal
       if (!ctx.args[0]) return ctx.message.reply('Bir kanal etiketlemelisin.');
       const idMatch = ctx.args[0].match(/<#(\d{17,})>/);
       const channelId = idMatch ? idMatch[1] : null;

@@ -41,7 +41,6 @@ async function updateStatsChannels(guild) {
   if (stats.aktif) {
     const aktifChannel = guild.channels.cache.get(stats.aktif);
     if (aktifChannel) {
-      // Sadece "online", "idle" ve "dnd" olan gerçek kullanıcıları say
       const online = guild.members.cache.filter(m => m.presence && ["online","idle","dnd"].includes(m.presence.status) && !m.user.bot).size;
       if (aktifChannel.type === 2) {
         await aktifChannel.setName(`Aktif: ${online}`);
@@ -63,8 +62,6 @@ client.once('clientReady', async () => {
   client.guilds.cache.forEach(guild => updateStatsChannels(guild));
   await deployCommands();
 });
-
-// commandHandler.js tüm komutları hallediyor, burada ek işleyici gerekli değil
 
 // Otomatik log kanalı sistemi
 const { getAutoLogChannel, setAutoLogChannel } = require('./config');
@@ -171,8 +168,6 @@ async function startBot() {
 startBot();
 
 require('./events/statsTracker')(client);
-
-// İstatistik dosyasını normalize et (eksik alanları tamamla / NaN temizle)
 try {
   const { normalize } = require('./utils/statsNormalizator');
   normalize();
@@ -205,10 +200,8 @@ function aggregateHistory() {
     const g = stats[guildId];
     if (!g.history) g.history = { daily: [], weekly: [], monthly: [] };
     if (!g.users) g.users = {}; if (!g.voiceUsers) g.voiceUsers = {};
-    // Günlük toplamlar
     const totalMsgs = Object.values(g.users).reduce((a,b)=>a+(typeof b==='number'?b:0),0);
     const totalVoice = Object.values(g.voiceUsers).reduce((a,b)=>a+(typeof b==='number'?b:0),0);
-    // Aynı gün içinde tekrar ekleme yapmayalım
     if (!g.history.daily.some(d => d.date === dayKey)) {
       pushCapped(g.history.daily, { date: dayKey, totalMsgs, totalVoice }, 60); // son 60 gün
     }
