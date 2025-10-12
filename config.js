@@ -1,13 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 
-// Config dosyaları için paths
 const banConfigPath = path.join(__dirname, 'banConfig.json');
 const logConfigPath = path.join(__dirname, 'logConfig.json');
 const autoLogConfigPath = path.join(__dirname, 'autoLogConfig.json');
 const inviteConfigPath = path.join(__dirname, 'inviteConfig.json');
 const prefixConfigPath = path.join(__dirname, 'prefixConfig.json');
 const jailConfigPath = path.join(__dirname, 'jailConfig.json');
+
+
 // Güvenlik konfigürasyon dosyaları
 const securityDir = path.join(__dirname, 'data');
 const securityConfigFile = path.join(securityDir, 'securityConfig.json');
@@ -17,14 +18,12 @@ const securityViolationFile = path.join(securityDir, 'securityViolations.json');
 // BAN CONFIG FUNCTIONS
 // ========================
 
-// Ban log kanalını al
 function getBanLogChannel(guildId) {
   if (!fs.existsSync(banConfigPath)) return null;
   const data = JSON.parse(fs.readFileSync(banConfigPath, 'utf8'));
   return data[guildId]?.logChannelId || null;
 }
 
-// Ban log kanalını ayarla
 function setBanLogChannel(guildId, channelId) {
   let data = {};
   if (fs.existsSync(banConfigPath)) {
@@ -41,14 +40,12 @@ function setBanLogChannel(guildId, channelId) {
 // LOG CONFIG FUNCTIONS
 // ========================
 
-// Genel log kanalını al
 function getLogChannel(guildId) {
   if (!fs.existsSync(logConfigPath)) return null;
   const data = JSON.parse(fs.readFileSync(logConfigPath, 'utf8'));
   return data[guildId] || null;
 }
 
-// Genel log kanalını ayarla
 function setLogChannel(guildId, channelId) {
   let data = {};
   if (fs.existsSync(logConfigPath)) {
@@ -62,14 +59,12 @@ function setLogChannel(guildId, channelId) {
 // AUTO LOG CONFIG FUNCTIONS
 // ========================
 
-// Otomatik log kanalını al
 function getAutoLogChannel(guildId) {
   if (!fs.existsSync(autoLogConfigPath)) return null;
   const data = JSON.parse(fs.readFileSync(autoLogConfigPath, 'utf8'));
   return data[guildId] || null;
 }
 
-// Otomatik log kanalını ayarla
 function setAutoLogChannel(guildId, channelId) {
   let data = {};
   if (fs.existsSync(autoLogConfigPath)) {
@@ -83,14 +78,12 @@ function setAutoLogChannel(guildId, channelId) {
 // INVITE CONFIG FUNCTIONS
 // ========================
 
-// Davet log kanalını al
 function getInviteLogChannel(guildId) {
   if (!fs.existsSync(inviteConfigPath)) return null;
   const data = JSON.parse(fs.readFileSync(inviteConfigPath, 'utf8'));
   return data[guildId] || null;
 }
 
-// Davet log kanalını ayarla
 function setInviteLogChannel(guildId, channelId) {
   let data = {};
   if (fs.existsSync(inviteConfigPath)) {
@@ -145,14 +138,12 @@ function findAnyLogChannel(guildId, preferredType = null) {
 // JAIL CONFIG FUNCTIONS
 // ========================
 
-// Jail rolünü al
 function getJailRole(guildId) {
   if (!fs.existsSync(jailConfigPath)) return null;
   const data = JSON.parse(fs.readFileSync(jailConfigPath, 'utf8'));
   return data[guildId]?.jailRoleId || null;
 }
 
-// Jail rolünü ayarla
 function setJailRole(guildId, roleId, roleName, setBy) {
   let data = {};
   if (fs.existsSync(jailConfigPath)) {
@@ -168,7 +159,6 @@ function setJailRole(guildId, roleId, roleName, setBy) {
   fs.writeFileSync(jailConfigPath, JSON.stringify(data, null, 2));
 }
 
-// Ek Jail fonksiyonları (jailConfig.js taşındı)
 function getJailRoleInfo(guildId) {
   try {
     if (!fs.existsSync(jailConfigPath)) {
@@ -282,7 +272,7 @@ function setUnjailLogChannel(guildId, channelId) {
 }
 
 // ========================
-// SECURITY CONFIG FUNCTIONS (securityConfig.js taşındı)
+// SECURITY CONFIG FUNCTIONS 
 // ========================
 
 const defaultSecurityConfig = {
@@ -322,10 +312,8 @@ function toCanonicalSecurityConfig(input) {
 }
 
 function toApiSecurityConfig(canonical) {
-  // Tüm eski alanları da doldurarak döndür
   return {
     ...canonical,
-    // Eski alan isimleri (compat)
     banThreshold: canonical.violationThreshold,
     punishment: canonical.punishmentType,
     logChannel: canonical.logChannelId,
@@ -365,9 +353,8 @@ function setSecurityConfig(guildId, config) {
     if (fs.existsSync(securityConfigFile)) {
       data = JSON.parse(fs.readFileSync(securityConfigFile, 'utf-8'));
     }
-    // Gelen konfigürasyonu kanonik hale getir, defaultlarla birleştir
     const canonical = toCanonicalSecurityConfig({ ...defaultSecurityConfig, ...config });
-    data[guildId] = canonical; // Dosyada kanonik anahtarlarla sakla
+    data[guildId] = canonical; 
     fs.writeFileSync(securityConfigFile, JSON.stringify(data, null, 2));
     return true;
   } catch (error) {
@@ -527,8 +514,6 @@ module.exports = {
 // PREFIX CONFIG FUNCTIONS
 // ========================
 
-// Prefix'i al (varsayılan: '.')
-// Hafif bellek cache: Uygulama ömrü boyunca prefix'leri tut, dosya değiştikçe güncelle.
 let _prefixCache = null;
 function loadPrefixCache() {
   if (!fs.existsSync(prefixConfigPath)) {
@@ -551,7 +536,7 @@ function getPrefix(guildId) {
   return _prefixCache[guildId]?.prefix || '.';
 }
 
-// Prefix'i ayarla
+// Prefix
 function setPrefix(guildId, prefix) {
   if (!guildId) return;
   ensurePrefixCache();
@@ -564,6 +549,5 @@ function setPrefix(guildId, prefix) {
   }
 }
 
-// Prefix fonksiyonlarını export'a ekle
 module.exports.getPrefix = getPrefix;
 module.exports.setPrefix = setPrefix;
