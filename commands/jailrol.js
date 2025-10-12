@@ -86,37 +86,10 @@ module.exports = {
     }
 
     try {
-      // Jail rol ayarını kaydet
-      const fs = require('fs');
-      const path = require('path');
-      
-      const configPath = path.join(__dirname, '..', 'jailConfig.json');
-      let config = {};
-      
-      // Mevcut config'i oku
-      try {
-        if (fs.existsSync(configPath)) {
-          const data = fs.readFileSync(configPath, 'utf8');
-          config = JSON.parse(data);
-        }
-      } catch (error) {
-        console.log('⚠️ Jail config dosyası okunamadı, yeni oluşturuluyor');
-        config = {};
-      }
-      
-      // Sunucu ayarını güncelle
-      if (!config[ctx.guild.id]) {
-        config[ctx.guild.id] = {};
-      }
-      
-      config[ctx.guild.id].jailRoleId = targetRole.id;
-      config[ctx.guild.id].jailRoleName = targetRole.name;
-      config[ctx.guild.id].setBy = executor.user.id;
-      config[ctx.guild.id].setAt = Date.now();
-      
-      // Config'i kaydet
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-      
+      // Jail rol ayarını kaydet (merkezi config API)
+      const { setJailRole } = require('../config');
+      setJailRole(ctx.guild.id, targetRole.id, targetRole.name, executor.user.id);
+
       console.log(`✅ Jail rolü ayarlandı: ${ctx.guild.name} -> ${targetRole.name}`);
 
       // Başarı mesajı

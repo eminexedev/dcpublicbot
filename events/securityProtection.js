@@ -1,5 +1,5 @@
 const { Events, EmbedBuilder, AuditLogEvent } = require('discord.js');
-const { getSecurityConfig, addViolation, getUserViolationCount } = require('../securityConfig');
+const { getSecurityConfig, addViolation, getUserViolationCount } = require('../config');
 const { getJailRole } = require('../config');
 
 module.exports = (client) => {

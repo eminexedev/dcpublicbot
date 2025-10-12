@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } = require('discord.js');
 const { getAutoLogChannel } = require('../config');
-const { getJailRole, getUnjailRole, getUnjailLogChannel } = require('../jailConfig');
+const { getJailRole, getUnjailRole, getUnjailLogChannel } = require('../config');
 
 module.exports = {
   data: new SlashCommandBuilder()

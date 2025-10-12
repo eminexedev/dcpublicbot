@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ChannelType } = require('discord.js');
-const { getSecurityConfig, setSecurityConfig } = require('../securityConfig');
+const { getSecurityConfig, setSecurityConfig } = require('../config');
 const { getJailRole } = require('../config');
 
 module.exports = {

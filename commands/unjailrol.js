@@ -86,37 +86,10 @@ module.exports = {
     }
 
     try {
-      // Unjail rol ayarını kaydet
-      const fs = require('fs');
-      const path = require('path');
-      
-      const configPath = path.join(__dirname, '..', 'jailConfig.json');
-      let config = {};
-      
-      // Mevcut config'i oku
-      try {
-        if (fs.existsSync(configPath)) {
-          const data = fs.readFileSync(configPath, 'utf8');
-          config = JSON.parse(data);
-        }
-      } catch (error) {
-        console.log('⚠️ Jail config dosyası okunamadı, yeni oluşturuluyor');
-        config = {};
-      }
-      
-      // Sunucu ayarını güncelle
-      if (!config[ctx.guild.id]) {
-        config[ctx.guild.id] = {};
-      }
-      
-      config[ctx.guild.id].unjailRoleId = targetRole.id;
-      config[ctx.guild.id].unjailRoleName = targetRole.name;
-      config[ctx.guild.id].unjailSetBy = executor.user.id;
-      config[ctx.guild.id].unjailSetAt = Date.now();
-      
-      // Config'i kaydet
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-      
+      // Unjail rol ayarını kaydet (merkezi config API)
+      const { setUnjailRole } = require('../config');
+      setUnjailRole(ctx.guild.id, targetRole.id, targetRole.name, executor.user.id);
+
       console.log(`✅ Unjail rolü ayarlandı: ${ctx.guild.name} -> ${targetRole.name}`);
 
       // Başarı mesajı

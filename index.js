@@ -74,7 +74,7 @@ client.on('guildCreate', async (guild) => {
   if (!logChannel) {
     logChannel = await guild.channels.create({
       name: 'bot-log',
-      type: 0,
+      type: 0, // Text channel
       reason: 'Bot log kanalı otomatik oluşturuldu.'
     });
   }

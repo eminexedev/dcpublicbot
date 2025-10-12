@@ -2,14 +2,16 @@ const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, Butt
 
 function getUserCommandsEmbed() {
 	return new EmbedBuilder()
-		.setTitle('🎮 Yardım Menüsü - Genel Komutlar')
+		.setTitle('Yardım Menüsü - Genel Komutlar')
 		.setColor('#00D166')
 		.setDescription('**Herkesin kullanabileceği komutlar:**')
 		.addFields(
 			{
 				name: '📊 İstatistik Komutları',
 				value: '`/istatistik` - Sunucu aktivite istatistiklerini gösterir\n' +
+					   '`/stat` - Kısa istatistik özeti\n' +
 					   '`/statembed` - Detaylı kullanıcı istatistiklerini embed ile gösterir\n' +
+					   '`/topchat` - En çok mesaj atanları listeler\n' +
 					   '`/rolliste` - Sunucudaki tüm rolleri listeler\n' +
 					   '`/banlist` - Sunucudan banlanan kullanıcıları listeler',
 				inline: false
@@ -20,7 +22,9 @@ function getUserCommandsEmbed() {
 					   '• Kendi avatarınız: `/avatar` veya `!avatar`\n' +
 					   '• Başka kullanıcı: `/avatar @kullanıcı` veya `!avatar @kullanıcı`\n' +
 					   '• ID ile: `!avatar 123456789012345678`\n' +
-					   '• Yüksek kalite indirme linkleri dahil',
+					   '• Yüksek kalite indirme linkleri dahil\n' +
+					   '`/nerede <@kullanıcı>` - Kullanıcı nerede? (ses/aktiflik)\n' +
+					   '`/sleep` - Rahatsız etmeyin modunu aç/kapat',
 				inline: false
 			},
 			{
@@ -29,6 +33,12 @@ function getUserCommandsEmbed() {
 					   '• Butonlu katılım sistemi\n' +
 					   '• Otomatik kazanan seçimi\n' +
 					   '• Süre dolunca sonuç açıklaması',
+				inline: false
+			},
+			{
+				name: 'ℹ️ Sunucu ve Rol Bilgisi',
+				value: '`/rolbilgi <@rol>` - Rol hakkında detaylı bilgi\n' +
+					   '`/rollog <@kullanıcı>` - Kullanıcının rol ekleme/çıkarma geçmişi (yetki gerekir)',
 				inline: false
 			},
 			{
@@ -47,16 +57,17 @@ function getUserCommandsEmbed() {
 
 function getModCommandsEmbed() {
 	return new EmbedBuilder()
-		.setTitle('🛡️ Yardım Menüsü - Moderasyon Komutları')
+		.setTitle('Moderasyon Komutları')
 		.setColor('#ED4245')
 		.setDescription('**Sadece yetkililerin kullanabileceği komutlar:**')
 		.addFields(
 			{
 				name: '⚡ Temel Moderasyon',
-				value: '`/ban <kullanıcı> [sebep]` - Kullanıcıyı sunucudan banlar\n' +
+				value: '`/ban <kullanıcı>` - İnteraktif sebep seçimi ile banlar\n' +
 					   '`/unban <kullanıcı_id> [sebep]` - Kullanıcının banını kaldırır\n' +
 					   '`/kick <kullanıcı> [sebep]` - Kullanıcıyı sunucudan atar\n' +
 					   '`/mute <kullanıcı>` - İnteraktif menü ile kullanıcıyı susturur\n' +
+					   '`/vmute <kullanıcı>` - Kullanıcıyı bulunduğu ses kanalında susturur\n' +
 					   '`/unmute <kullanıcı> [sebep]` - Kullanıcının susturmasını kaldırır\n' +
 					   '`/sil <sayı>` - Belirtilen sayıda mesajı siler (1-100)\n\n' +
 					   '**🔇 Mute Sistemi:**\n' +
@@ -91,6 +102,7 @@ function getModCommandsEmbed() {
 				value: '`/rolver <kullanıcı> <rol> [sebep]` - Kullanıcıya rol verir\n' +
 					   '`/rolal <kullanıcı> <rol> [sebep]` - Kullanıcıdan rol alır\n' +
 					   '`/rollerisil` - Sunucudaki tüm rolleri siler ⚠️\n' +
+					   '`/rollog <@kullanıcı>` - Kullanıcının rol değişim geçmişini listeler\n' +
 					   '• Güvenlik kontrolü ve onay sistemi vardır',
 				inline: false
 			},

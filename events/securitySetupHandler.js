@@ -1,5 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ChannelType, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { getSecurityConfig, setSecurityConfig } = require('../securityConfig');
+const { getSecurityConfig, setSecurityConfig } = require('../config');
 const { setJailRole, getJailRole } = require('../config');
 
 // Güvenlik kurulum interaction handler'ı

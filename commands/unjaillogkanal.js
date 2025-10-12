@@ -86,37 +86,10 @@ module.exports = {
     }
 
     try {
-      // Unjail log kanal ayarını kaydet
-      const fs = require('fs');
-      const path = require('path');
-      
-      const configPath = path.join(__dirname, '..', 'jailConfig.json');
-      let config = {};
-      
-      // Mevcut config'i oku
-      try {
-        if (fs.existsSync(configPath)) {
-          const data = fs.readFileSync(configPath, 'utf8');
-          config = JSON.parse(data);
-        }
-      } catch (error) {
-        console.log('⚠️ Jail config dosyası okunamadı, yeni oluşturuluyor');
-        config = {};
-      }
-      
-      // Sunucu ayarını güncelle
-      if (!config[ctx.guild.id]) {
-        config[ctx.guild.id] = {};
-      }
-      
-      config[ctx.guild.id].unjailLogChannelId = targetChannel.id;
-      config[ctx.guild.id].unjailLogChannelName = targetChannel.name;
-      config[ctx.guild.id].unjailLogSetBy = executor.user.id;
-      config[ctx.guild.id].unjailLogSetAt = Date.now();
-      
-      // Config'i kaydet
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-      
+      // Unjail log kanal ayarını kaydet (merkezi config API)
+      const { setUnjailLogChannel } = require('../config');
+      setUnjailLogChannel(ctx.guild.id, targetChannel.id);
+
       console.log(`✅ Unjail log kanalı ayarlandı: ${ctx.guild.name} -> #${targetChannel.name}`);
 
       // Başarı mesajı

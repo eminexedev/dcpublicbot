@@ -344,7 +344,7 @@ module.exports = (client) => {
 
         // Güvenlik sistemi butonları
         if (customId === 'security_enable') {
-          const { getSecurityConfig, setSecurityConfig } = require('../securityConfig');
+          const { getSecurityConfig, setSecurityConfig } = require('../config');
           const config = getSecurityConfig(interaction.guildId);
           config.enabled = true;
           
@@ -363,7 +363,7 @@ module.exports = (client) => {
         }
 
         if (customId === 'security_disable') {
-          const { getSecurityConfig, setSecurityConfig } = require('../securityConfig');
+          const { getSecurityConfig, setSecurityConfig } = require('../config');
           const config = getSecurityConfig(interaction.guildId);
           config.enabled = false;
           
@@ -382,7 +382,7 @@ module.exports = (client) => {
         }
 
         if (customId === 'security_settings') {
-          const { getSecurityConfig } = require('../securityConfig');
+          const { getSecurityConfig } = require('../config');
           const config = getSecurityConfig(interaction.guildId);
           
           const settingsEmbed = new EmbedBuilder()

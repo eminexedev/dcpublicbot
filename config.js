@@ -8,6 +8,10 @@ const autoLogConfigPath = path.join(__dirname, 'autoLogConfig.json');
 const inviteConfigPath = path.join(__dirname, 'inviteConfig.json');
 const prefixConfigPath = path.join(__dirname, 'prefixConfig.json');
 const jailConfigPath = path.join(__dirname, 'jailConfig.json');
+// Güvenlik konfigürasyon dosyaları
+const securityDir = path.join(__dirname, 'data');
+const securityConfigFile = path.join(securityDir, 'securityConfig.json');
+const securityViolationFile = path.join(securityDir, 'securityViolations.json');
 
 // ========================
 // BAN CONFIG FUNCTIONS
@@ -149,7 +153,7 @@ function getJailRole(guildId) {
 }
 
 // Jail rolünü ayarla
-function setJailRole(guildId, roleId) {
+function setJailRole(guildId, roleId, roleName, setBy) {
   let data = {};
   if (fs.existsSync(jailConfigPath)) {
     data = JSON.parse(fs.readFileSync(jailConfigPath, 'utf8'));
@@ -158,7 +162,297 @@ function setJailRole(guildId, roleId) {
     data[guildId] = {};
   }
   data[guildId].jailRoleId = roleId;
+  if (roleName) data[guildId].jailRoleName = roleName;
+  if (setBy) data[guildId].setBy = setBy;
+  if (roleName || setBy) data[guildId].setAt = Date.now();
   fs.writeFileSync(jailConfigPath, JSON.stringify(data, null, 2));
+}
+
+// Ek Jail fonksiyonları (jailConfig.js taşındı)
+function getJailRoleInfo(guildId) {
+  try {
+    if (!fs.existsSync(jailConfigPath)) {
+      return null;
+    }
+    const data = fs.readFileSync(jailConfigPath, 'utf8');
+    const config = JSON.parse(data);
+    return config[guildId] || null;
+  } catch (error) {
+    console.error('Jail config bilgi okuma hatası:', error);
+    return null;
+  }
+}
+
+function getUnjailRole(guildId) {
+  try {
+    if (!fs.existsSync(jailConfigPath)) {
+      return null;
+    }
+    const data = fs.readFileSync(jailConfigPath, 'utf8');
+    const config = JSON.parse(data);
+    return config[guildId]?.unjailRoleId || null;
+  } catch (error) {
+    console.error('Unjail config okuma hatası:', error);
+    return null;
+  }
+}
+
+function setUnjailRole(guildId, roleId, roleName, setBy) {
+  try {
+    let config = {};
+    if (fs.existsSync(jailConfigPath)) {
+      const data = fs.readFileSync(jailConfigPath, 'utf8');
+      config = JSON.parse(data);
+    }
+    if (!config[guildId]) {
+      config[guildId] = {};
+    }
+    config[guildId].unjailRoleId = roleId;
+    config[guildId].unjailRoleName = roleName;
+    config[guildId].unjailSetBy = setBy;
+    config[guildId].unjailSetAt = Date.now();
+    fs.writeFileSync(jailConfigPath, JSON.stringify(config, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Unjail config kaydetme hatası:', error);
+    return false;
+  }
+}
+
+function getJailLogChannel(guildId) {
+  try {
+    if (!fs.existsSync(jailConfigPath)) {
+      return null;
+    }
+    const data = fs.readFileSync(jailConfigPath, 'utf8');
+    const config = JSON.parse(data);
+    return config[guildId]?.jailLogChannelId || null;
+  } catch (error) {
+    console.error('Jail log config okuma hatası:', error);
+    return null;
+  }
+}
+
+function getUnjailLogChannel(guildId) {
+  try {
+    if (!fs.existsSync(jailConfigPath)) {
+      return null;
+    }
+    const data = fs.readFileSync(jailConfigPath, 'utf8');
+    const config = JSON.parse(data);
+    return config[guildId]?.unjailLogChannelId || null;
+  } catch (error) {
+    console.error('Unjail log config okuma hatası:', error);
+    return null;
+  }
+}
+
+function setJailLogChannel(guildId, channelId) {
+  try {
+    let config = {};
+    if (fs.existsSync(jailConfigPath)) {
+      const data = fs.readFileSync(jailConfigPath, 'utf8');
+      config = JSON.parse(data);
+    }
+    if (!config[guildId]) config[guildId] = {};
+    config[guildId].jailLogChannelId = channelId;
+    fs.writeFileSync(jailConfigPath, JSON.stringify(config, null, 2));
+    return true;
+  } catch (e) {
+    console.error('Jail log kanal kaydetme hatası:', e);
+    return false;
+  }
+}
+
+function setUnjailLogChannel(guildId, channelId) {
+  try {
+    let config = {};
+    if (fs.existsSync(jailConfigPath)) {
+      const data = fs.readFileSync(jailConfigPath, 'utf8');
+      config = JSON.parse(data);
+    }
+    if (!config[guildId]) config[guildId] = {};
+    config[guildId].unjailLogChannelId = channelId;
+    fs.writeFileSync(jailConfigPath, JSON.stringify(config, null, 2));
+    return true;
+  } catch (e) {
+    console.error('Unjail log kanal kaydetme hatası:', e);
+    return false;
+  }
+}
+
+// ========================
+// SECURITY CONFIG FUNCTIONS (securityConfig.js taşındı)
+// ========================
+
+const defaultSecurityConfig = {
+  enabled: true,
+  violationThreshold: 3,
+  timeWindow: 24 * 60 * 60 * 1000,
+  punishmentType: 'both',
+  logChannelId: null,
+  whitelistRoles: [],
+  whitelistUsers: []
+};
+
+// Eski/Yeni alan adları arasında uyumluluk sağlamak için yardımcılar
+function toCanonicalSecurityConfig(input) {
+  // Giriş hem dosyadan okunan ham veri hem de komutlardan gelen obje olabilir
+  const cfg = input || {};
+  // Yeni isimler öncelikli, yoksa eski isimlerden türet
+  const violationThreshold = isFinite(cfg.violationThreshold) ? cfg.violationThreshold
+    : (isFinite(cfg.banThreshold) ? cfg.banThreshold : defaultSecurityConfig.violationThreshold);
+  const punishmentType = cfg.punishmentType || (cfg.punishment || defaultSecurityConfig.punishmentType);
+  const logChannelId = cfg.logChannelId || (cfg.logChannel || null);
+  // Liste alanları
+  const whitelistRoles = Array.isArray(cfg.whitelistRoles) ? cfg.whitelistRoles
+    : (Array.isArray(cfg.whitelistedRoles) ? cfg.whitelistedRoles : []);
+  const whitelistUsers = Array.isArray(cfg.whitelistUsers) ? cfg.whitelistUsers
+    : (Array.isArray(cfg.exemptUsers) ? cfg.exemptUsers : []);
+
+  return {
+    enabled: typeof cfg.enabled === 'boolean' ? cfg.enabled : defaultSecurityConfig.enabled,
+    violationThreshold,
+    timeWindow: isFinite(cfg.timeWindow) ? cfg.timeWindow : defaultSecurityConfig.timeWindow,
+    punishmentType,
+    logChannelId,
+    whitelistRoles,
+    whitelistUsers
+  };
+}
+
+function toApiSecurityConfig(canonical) {
+  // Tüm eski alanları da doldurarak döndür
+  return {
+    ...canonical,
+    // Eski alan isimleri (compat)
+    banThreshold: canonical.violationThreshold,
+    punishment: canonical.punishmentType,
+    logChannel: canonical.logChannelId,
+    whitelistedRoles: canonical.whitelistRoles,
+    exemptUsers: canonical.whitelistUsers
+  };
+}
+
+function ensureSecurityDir() {
+  if (!fs.existsSync(securityDir)) {
+    fs.mkdirSync(securityDir, { recursive: true });
+  }
+}
+
+function getSecurityConfig(guildId) {
+  try {
+    ensureSecurityDir();
+    if (!fs.existsSync(securityConfigFile)) {
+      fs.writeFileSync(securityConfigFile, JSON.stringify({}, null, 2));
+      const canonical = { ...defaultSecurityConfig };
+      return toApiSecurityConfig(canonical);
+    }
+    const data = JSON.parse(fs.readFileSync(securityConfigFile, 'utf-8'));
+    const raw = data[guildId];
+    const canonical = toCanonicalSecurityConfig(raw || defaultSecurityConfig);
+    return toApiSecurityConfig(canonical);
+  } catch (error) {
+    console.error('Güvenlik config okuma hatası:', error);
+    return toApiSecurityConfig({ ...defaultSecurityConfig });
+  }
+}
+
+function setSecurityConfig(guildId, config) {
+  try {
+    ensureSecurityDir();
+    let data = {};
+    if (fs.existsSync(securityConfigFile)) {
+      data = JSON.parse(fs.readFileSync(securityConfigFile, 'utf-8'));
+    }
+    // Gelen konfigürasyonu kanonik hale getir, defaultlarla birleştir
+    const canonical = toCanonicalSecurityConfig({ ...defaultSecurityConfig, ...config });
+    data[guildId] = canonical; // Dosyada kanonik anahtarlarla sakla
+    fs.writeFileSync(securityConfigFile, JSON.stringify(data, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Güvenlik config kaydetme hatası:', error);
+    return false;
+  }
+}
+
+function getViolations(guildId) {
+  try {
+    ensureSecurityDir();
+    if (!fs.existsSync(securityViolationFile)) {
+      fs.writeFileSync(securityViolationFile, JSON.stringify({}, null, 2));
+      return {};
+    }
+    const data = JSON.parse(fs.readFileSync(securityViolationFile, 'utf-8'));
+    return data[guildId] || {};
+  } catch (error) {
+    console.error('İhlal verisi okuma hatası:', error);
+    return {};
+  }
+}
+
+function addViolation(guildId, userId, violationType, targetUserId, reason) {
+  try {
+    ensureSecurityDir();
+    let data = {};
+    if (fs.existsSync(securityViolationFile)) {
+      data = JSON.parse(fs.readFileSync(securityViolationFile, 'utf-8'));
+    }
+    if (!data[guildId]) data[guildId] = {};
+    if (!data[guildId][userId]) data[guildId][userId] = [];
+
+    const violation = {
+      type: violationType,
+      targetUserId,
+      reason: reason || 'Sebep belirtilmemiş',
+      timestamp: Date.now(),
+      processed: false
+    };
+
+    data[guildId][userId].push(violation);
+
+  const config = getSecurityConfig(guildId);
+    const cutoffTime = Date.now() - config.timeWindow;
+    data[guildId][userId] = data[guildId][userId].filter(v => v.timestamp > cutoffTime);
+
+    fs.writeFileSync(securityViolationFile, JSON.stringify(data, null, 2));
+    return data[guildId][userId].length;
+  } catch (error) {
+    console.error('İhlal kaydı ekleme hatası:', error);
+    return 0;
+  }
+}
+
+function getUserViolationCount(guildId, userId) {
+  try {
+  const data = getViolations(guildId);
+  if (!data[userId]) return 0;
+  const config = getSecurityConfig(guildId);
+    const cutoffTime = Date.now() - config.timeWindow;
+    return data[userId].filter(v => v.timestamp > cutoffTime).length;
+  } catch (error) {
+    console.error('İhlal sayısı getirme hatası:', error);
+    return 0;
+  }
+}
+
+function clearUserViolations(guildId, userId) {
+  try {
+    ensureSecurityDir();
+    let data = {};
+    if (fs.existsSync(securityViolationFile)) {
+      data = JSON.parse(fs.readFileSync(securityViolationFile, 'utf-8'));
+    }
+    if (data[guildId] && data[guildId][userId]) {
+      delete data[guildId][userId];
+      fs.writeFileSync(securityViolationFile, JSON.stringify(data, null, 2));
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('İhlal temizleme hatası:', error);
+    return false;
+  }
 }
 
 // ========================
@@ -208,10 +502,25 @@ module.exports = {
   // Jail Config
   getJailRole,
   setJailRole,
+  getJailRoleInfo,
+  getUnjailRole,
+  setUnjailRole,
+  getJailLogChannel,
+  getUnjailLogChannel,
+  setJailLogChannel,
+  setUnjailLogChannel,
   
   // Utility Functions
   findAnyLogChannel,
-  getAllConfigStatus
+  getAllConfigStatus,
+
+  // Security Config
+  getSecurityConfig,
+  setSecurityConfig,
+  addViolation,
+  getUserViolationCount,
+  clearUserViolations,
+  getViolations
 };
 
 // ========================

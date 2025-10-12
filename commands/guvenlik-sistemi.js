@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { getSecurityConfig, setSecurityConfig, clearUserViolations, getViolations } = require('../securityConfig');
+const { getSecurityConfig, setSecurityConfig, clearUserViolations, getViolations } = require('../config');
 
 module.exports = {
   data: new SlashCommandBuilder()
