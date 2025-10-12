@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const { getAutoLogChannel } = require('../autoLogConfig');
+const { findAnyLogChannel } = require('../config');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -128,7 +128,7 @@ module.exports = {
       await reply({ embeds: [successEmbed] });
       
       // Unban Log sistemi
-      const logChannelId = getAutoLogChannel(guild.id);
+      const logChannelId = findAnyLogChannel(guild.id);
       if (logChannelId) {
         const logChannel = guild.channels.cache.get(logChannelId);
         if (logChannel) {
@@ -141,12 +141,12 @@ module.exports = {
             .addFields(
               {
                 name: '👤 Ban Kaldırılan Kullanıcı',
-                value: `**${banInfo.user.tag}**\n\`ID: ${banInfo.user.id}\``,
+                value: `${banInfo.user} (\`${banInfo.user.id}\`)`,
                 inline: true
               },
               {
                 name: '👮‍♂️ Yetkili',
-                value: `**${replyUser.tag}**\n\`ID: ${replyUser.id}\``,
+                value: `${replyUser} (\`${replyUser.id}\`)`,
                 inline: true
               },
               {

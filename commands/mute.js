@@ -162,8 +162,10 @@ module.exports = {
       .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
       .setTimestamp();
 
+    const ownerId = executorId;
+    const customId = `mute:g=${ctx.guild.id};t=${targetUser.id};o=${ownerId}`;
     const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId(`mute_${targetUser.id}`)
+      .setCustomId(customId)
       .setPlaceholder('Mute sebebini seç...')
       .addOptions([
         {
@@ -205,7 +207,35 @@ module.exports = {
 
 // Mute select menu etkileşimi
 module.exports.handleSelectMenu = async (interaction) => {
-  if (!interaction.customId.startsWith('mute_')) return;
+  if (!(interaction.customId.startsWith('mute_') || interaction.customId.startsWith('mute:'))) return;
+  
+  // helper: kv parse
+  const kv = (key) => {
+    const m = interaction.customId.match(new RegExp(`${key}=([^;]+)`));
+    return m ? m[1] : null;
+  };
+  
+  // Eski ve yeni customId biçimlerini destekle
+  let targetUserId = null;
+  let ownerId = null;
+  let guildIdInId = null;
+  if (interaction.customId.startsWith('mute:')) {
+    targetUserId = kv('t');
+    ownerId = kv('o');
+    guildIdInId = kv('g');
+  } else {
+    // eski format: mute_<targetId>
+    targetUserId = interaction.customId.split('_')[1];
+  }
+  
+  // Yetkisiz kullanıcıların menüye müdahale etmesini engelle
+  if (ownerId && interaction.user.id !== ownerId) {
+    return interaction.reply({ content: '❌ Bu menüyü sadece komutu kullanan kişi kullanabilir.', ephemeral: true });
+  }
+  // Gerekirse guild eşleşmesi kontrolü
+  if (guildIdInId && interaction.guild?.id && interaction.guild.id !== guildIdInId) {
+    return interaction.reply({ content: 'Geçersiz bağlam.', ephemeral: true });
+  }
   
   // SÜPER GÜÇLÜ SELECT MENU KLONLANMA ENGELLEYİCİ
   const selectMenuUserId = interaction.user.id;
@@ -238,7 +268,6 @@ module.exports.handleSelectMenu = async (interaction) => {
     return;
   }
   
-  const targetUserId = interaction.customId.split('_')[1];
   const selectedReason = interaction.values[0];
   
   const muteSebepler = {
@@ -384,7 +413,7 @@ module.exports.handleSelectMenu = async (interaction) => {
       console.log(`🎯 Toplam: ${successCount} başarılı, ${errorCount} hata`);
     }
     
-    // Kullanıcıya mute rolünü ver
+  // Kullanıcıya mute rolünü ver
     await member.roles.add(muteRole, secenek.sebep);
     
     // Eğer kullanıcı voice kanalındaysa anında mute et
@@ -523,6 +552,38 @@ module.exports.handleSelectMenu = async (interaction) => {
         embeds: [successEmbed], 
         components: []
       });
+      // Orijinal mesajdaki menüyü devre dışı bırak
+      try {
+        const original = interaction.message;
+        if (original && original.components?.length) {
+          const rows = original.components.map(r => {
+            const row = ActionRowBuilder.from(r);
+            row.components = row.components.map(c => {
+              if (c.data?.custom_id?.startsWith('mute') || c.customId?.startsWith?.('mute')) {
+                const menu = new StringSelectMenuBuilder()
+                  .setCustomId(c.data?.custom_id || c.customId)
+                  .setPlaceholder(c.data?.placeholder || c.placeholder || 'Seçim')
+                  .setDisabled(true);
+                // seçenekleri kopyala
+                const opts = (c.data?.options || c.options || []).map(o => ({
+                  label: o.label,
+                  value: o.value,
+                  description: o.description,
+                  emoji: o.emoji
+                }));
+                if (opts.length) menu.addOptions(opts);
+                row.components = [menu];
+                return menu;
+              }
+              return c;
+            });
+            return row;
+          });
+          await original.edit({ components: rows });
+        }
+      } catch (e) {
+        // yoksay (ephemeral mesajlarda veya izin yoksa başarısız olabilir)
+      }
       console.log('✅ Mute işlemi başarıyla tamamlandı ve yanıt gönderildi');
     } catch (interactionError) {
       console.error('❌ Interaction response hatası:', interactionError.message);

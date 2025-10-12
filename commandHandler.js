@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { Collection, Events, AuditLogEvent } = require('discord.js');
+const { Collection, Events, AuditLogEvent, MessageFlags } = require('discord.js');
 
 module.exports = (client) => {
   client.commands = new Collection();
@@ -59,6 +59,34 @@ module.exports = (client) => {
   }
 
   client.on(Events.InteractionCreate, async interaction => {
+    // Tüm Interaction yanıtlarında `ephemeral` alanını otomatik olarak `flags: Ephemeral`'e dönüştür
+    const normalizeEphemeral = (payload) => {
+      if (!payload || typeof payload !== 'object') return payload;
+      // Kopya oluştur, orijinali değiştirmeyelim
+      const copy = { ...payload };
+      if (Object.prototype.hasOwnProperty.call(copy, 'ephemeral')) {
+        if (copy.ephemeral) {
+          // Mevcut flags varsa üzerine Ephemeral bitini ekle
+          copy.flags = (copy.flags || 0) | MessageFlags.Ephemeral;
+        }
+        delete copy.ephemeral;
+      }
+      return copy;
+    };
+    try {
+      // reply/followUp/deferReply metodlarını sar
+      if (interaction && typeof interaction.reply === 'function' && !interaction._ephemeralPatched) {
+        const origReply = interaction.reply.bind(interaction);
+        interaction.reply = (options) => origReply(normalizeEphemeral(options));
+        const origFollow = interaction.followUp?.bind(interaction);
+        if (origFollow) interaction.followUp = (options) => origFollow(normalizeEphemeral(options));
+        const origDefer = interaction.deferReply?.bind(interaction);
+        if (origDefer) interaction.deferReply = (options) => origDefer(normalizeEphemeral(options));
+        interaction._ephemeralPatched = true;
+      }
+    } catch (e) {
+      console.warn('[EPHEMERAL PATCH WARN]', e?.message);
+    }
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
@@ -97,6 +125,7 @@ module.exports = (client) => {
           isCommand: () => true, // Bu slash komut
           author: interaction.user, // Prefix uyumluluğu için
           reply: async (content) => {
+            content = normalizeEphemeral(content);
             if (interaction.replied || interaction.deferred) {
               return await interaction.followUp(content);
             } else {
@@ -194,6 +223,38 @@ module.exports = (client) => {
         await mute.handleSelectMenu(interaction);
       }
     }
+
+    // Ban seçim menüsü
+    if (
+      (interaction.isStringSelectMenu && interaction.customId && interaction.customId.startsWith('ban')) ||
+      (typeof interaction.isStringSelectMenu === 'function' && interaction.isStringSelectMenu() && interaction.customId && interaction.customId.startsWith('ban'))
+    ) {
+      // Anti-spam/clone koruması (mute ile benzer)
+      if (!client._selectMenuExecutions) client._selectMenuExecutions = new Set();
+      if (!client._lastSelectExecutionTime) client._lastSelectExecutionTime = new Map();
+
+      const selectKey = `${interaction.user.id}_${interaction.customId}`;
+      const now = Date.now();
+      const lastExecution = client._lastSelectExecutionTime.get(selectKey);
+      if (lastExecution && (now - lastExecution) < 1000) {
+        console.log(`🚫 [ANTI-SPAM] Ban select menu çok hızlı çalıştırılıyor: ${interaction.user.tag}`);
+        return;
+      }
+      if (client._selectMenuExecutions.has(selectKey)) {
+        console.log(`🚫 [ANTI-CLONE] Ban select menu hala işleniyor: ${interaction.user.tag}`);
+        return;
+      }
+      client._selectMenuExecutions.add(selectKey);
+      client._lastSelectExecutionTime.set(selectKey, now);
+      setTimeout(() => {
+        client._selectMenuExecutions.delete(selectKey);
+      }, 5000);
+
+      const ban = client.commands.get('ban');
+      if (ban && ban.handleSelectMenu) {
+        try { await ban.handleSelectMenu(interaction); } catch (e) { console.error('[BAN SELECT ERROR]', e); }
+      }
+    }
     
     // Jail seçim menüsü
     if (
@@ -276,7 +337,9 @@ module.exports = (client) => {
         'cek': 'cek',
         'rolbilgi': 'rolbilgi',
         'sleep': 'sleep',
-        'rollog': 'rollog'
+        'rollog': 'rollog',
+        'voicemute': 'vmute',
+        'vmuted': 'vmute'
       };
       // Kısa yol aliasları
       if (!command && (commandName === 'n' || commandName === 'nerede')) {
@@ -290,7 +353,7 @@ module.exports = (client) => {
     if (!command) return;
     
     // MODERATION KOMUTLARI İÇİN EK GÜVENLİK KONTROLÜ
-    const moderationCommands = ['mute', 'unmute', 'ban', 'unban', 'kick', 'kayıt', 'kayit'];
+  const moderationCommands = ['mute', 'vmute', 'unmute', 'ban', 'unban', 'kick', 'kayıt', 'kayit'];
     if (moderationCommands.includes(commandName)) {
       console.log(`🛡️ [SECURITY] Moderation komut girişimi: ${commandName} - User: ${message.author.tag} (${message.author.id})`);
       
@@ -302,6 +365,7 @@ module.exports = (client) => {
       // Yetki kontrol listesi
       const requiredPerms = {
         'mute': 'MuteMembers',
+        'vmute': 'MuteMembers',
         'unmute': 'MuteMembers', 
         'ban': 'BanMembers',
         'unban': 'BanMembers',
@@ -356,11 +420,14 @@ module.exports = (client) => {
         client: client,
         isCommand: () => false, // Bu prefix komut, slash değil
         reply: async (content) => {
-          if (typeof content === 'string') {
-            return await message.reply(content);
-          } else {
-            return await message.reply(content);
+          // Message.reply ephemeral/flags desteklemez, güvenli temizle
+          if (content && typeof content === 'object') {
+            const copy = { ...content };
+            if (Object.prototype.hasOwnProperty.call(copy, 'ephemeral')) delete copy.ephemeral;
+            if (Object.prototype.hasOwnProperty.call(copy, 'flags')) delete copy.flags;
+            return await message.reply(copy);
           }
+          return await message.reply(content);
         }
       };
       
