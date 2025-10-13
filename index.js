@@ -140,6 +140,9 @@ require('./events/templateInteractions')(client);
 // Security protection event handler'ını ekle
 require('./events/securityProtection')(client);
 
+// Özel oda (private voice) sistemi
+require('./events/privateVoice')(client);
+
 // Bot'u başlat
 async function startBot() {
   try {

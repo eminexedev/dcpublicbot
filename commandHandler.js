@@ -152,6 +152,19 @@ module.exports = (client) => {
         await cekilis.handleButton(interaction);
       }
     }
+    // Özel oda panel butonları
+    if (interaction.isButton && typeof interaction.isButton === 'function' ? interaction.isButton() : interaction.isButton) {
+      if (interaction.customId && interaction.customId.startsWith('pv:')) {
+        const ozeloda = client.commands.get('ozeloda');
+        if (ozeloda && ozeloda.handleButton) {
+          try {
+            await ozeloda.handleButton(interaction);
+          } catch (e) {
+            console.error('[OZELODA BUTTON ERROR]', e);
+          }
+        }
+      }
+    }
     // Yardım menüsü butonları
     if (interaction.isButton() && (interaction.customId === 'help_user' || interaction.customId === 'help_mod')) {
       const yardim = client.commands.get('yardım');
@@ -310,6 +323,13 @@ module.exports = (client) => {
         await kayit.handleModal(interaction);
       }
     }
+    // Özel oda rename modal
+    if (interaction.isModalSubmit && interaction.customId === 'pv:modal:rename') {
+      const ozeloda = client.commands.get('ozeloda');
+      if (ozeloda && ozeloda.handleModal) {
+        try { await ozeloda.handleModal(interaction); } catch (e) { console.error('[OZELODA MODAL ERROR]', e); }
+      }
+    }
   });
 
   // Universal Handler ile prefix komut sistemi
@@ -320,12 +340,25 @@ module.exports = (client) => {
     if (!message.content.startsWith(prefix)) return;
 
     const args = message.content.slice(prefix.length).trim().split(/ +/);
-    const commandName = args.shift()?.toLowerCase();
+    let commandName = args.shift()?.toLowerCase();
+
+    // TR karakter normalizasyonu: ö->o, ü->u, ğ->g, ş->s, ç->c, ı->i
+    const trNormalize = (s) => s
+      .replace(/ö/g, 'o').replace(/ü/g, 'u')
+      .replace(/ğ/g, 'g').replace(/ş/g, 's')
+      .replace(/ç/g, 'c').replace(/ı/g, 'i');
 
     if (!commandName) return;
 
     // Komut arama: önce tam isim, sonra alternatif isimler
     let command = client.commands.get(commandName);
+    if (!command) {
+      const asciiName = trNormalize(commandName);
+      if (asciiName !== commandName) {
+        command = client.commands.get(asciiName);
+        if (command) commandName = asciiName;
+      }
+    }
     if (!command) {
       // Alternatif komut isimleri için arama
       const alternativeNames = {
@@ -333,6 +366,14 @@ module.exports = (client) => {
         'sil': 'sil',
         'clear': 'sil',
         'purge': 'sil',
+        // Özel oda kurulum sihirbazı alias'ları
+        'özeloda': 'ozeloda',
+        'özel-oda': 'ozeloda',
+        'ozel-oda': 'ozeloda',
+        'öo': 'ozeloda',
+        'oo': 'ozeloda',
+        'privatevoice': 'ozeloda',
+        'private-room': 'ozeloda',
         'çek': 'cek',
         'cek': 'cek',
         'rolbilgi': 'rolbilgi',

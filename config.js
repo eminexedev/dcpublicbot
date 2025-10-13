@@ -7,6 +7,7 @@ const autoLogConfigPath = path.join(__dirname, 'autoLogConfig.json');
 const inviteConfigPath = path.join(__dirname, 'inviteConfig.json');
 const prefixConfigPath = path.join(__dirname, 'prefixConfig.json');
 const jailConfigPath = path.join(__dirname, 'jailConfig.json');
+const privateVoiceConfigPath = path.join(__dirname, 'privateVoiceConfig.json');
 
 
 // Güvenlik konfigürasyon dosyaları
@@ -454,6 +455,13 @@ function getAllConfigStatus(guildId) {
     autoLog: getAutoLogChannel(guildId),
     inviteLog: getInviteLogChannel(guildId),
     jailRole: getJailRole(guildId),
+    privateVoice: (() => {
+      try {
+        if (!fs.existsSync(privateVoiceConfigPath)) return null;
+        const data = JSON.parse(fs.readFileSync(privateVoiceConfigPath, 'utf8'));
+        return data[guildId] || null;
+      } catch { return null; }
+    })(),
     prefixLog: (() => {
       try {
         const prefixConfig = JSON.parse(fs.readFileSync('./prefixConfig.json', 'utf8'));
@@ -500,6 +508,10 @@ module.exports = {
   // Utility Functions
   findAnyLogChannel,
   getAllConfigStatus,
+  
+  // Private Voice Config
+  getPrivateVoiceConfig,
+  setPrivateVoiceConfig,
 
   // Security Config
   getSecurityConfig,
@@ -551,3 +563,47 @@ function setPrefix(guildId, prefix) {
 
 module.exports.getPrefix = getPrefix;
 module.exports.setPrefix = setPrefix;
+
+// ========================
+// PRIVATE VOICE CONFIG
+// ========================
+
+const defaultPrivateVoiceConfig = {
+  enabled: true,
+  triggerNames: ['özel oda oluştur'],
+  nameTemplate: '{user} Channel',
+  autoDelete: true,
+  categoryId: null,
+  userLimit: null,
+  bitrate: null,
+  panelChannelId: null,
+  panelMessageId: null
+};
+
+function readJsonSafe(file) {
+  try {
+    if (!fs.existsSync(file)) return {};
+    return JSON.parse(fs.readFileSync(file, 'utf8')) || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeJsonSafe(file, data) {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
+
+function getPrivateVoiceConfig(guildId) {
+  const all = readJsonSafe(privateVoiceConfigPath);
+  const cfg = all[guildId];
+  if (!cfg) return { ...defaultPrivateVoiceConfig };
+  return { ...defaultPrivateVoiceConfig, ...cfg };
+}
+
+function setPrivateVoiceConfig(guildId, updates) {
+  const all = readJsonSafe(privateVoiceConfigPath);
+  const prev = all[guildId] || {};
+  all[guildId] = { ...defaultPrivateVoiceConfig, ...prev, ...updates };
+  writeJsonSafe(privateVoiceConfigPath, all);
+  return all[guildId];
+}
