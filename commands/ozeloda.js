@@ -151,7 +151,18 @@ module.exports = {
       }
 
   const { embed, rows, files } = await composePanel(ctx.client, guild, ctx.member || null);
-  const sent = await channel.send({ embeds: [embed], components: rows, files });
+  let sent;
+  try {
+    sent = await channel.send({ embeds: [embed], components: rows, files });
+  } catch (e) {
+    // Dosya/ek gönderimi (File/Blob) bazı Node sürümlerinde uyarı/engelleme çıkarabilir; görselsiz fallback deneyelim
+    try {
+      sent = await channel.send({ embeds: [embed], components: rows });
+      await reply({ content: '⚠️ Panel görseli gönderilemedi, görselsiz panel oluşturuldu. (Sunucu çıkışı engeli veya Node/undici uyumsuzluğu olabilir)', ephemeral: isSlash });
+    } catch (e2) {
+      return reply({ content: `❌ Panel gönderilemedi: ${e2?.message || 'bilinmeyen hata'}`, ephemeral: isSlash });
+    }
+  }
       setPrivateVoiceConfig(guild.id, { panelChannelId: channel.id, panelMessageId: sent.id });
       const confirmation = await reply({ content: `✅ Kontrol paneli gönderildi: ${channel}`, ephemeral: isSlash });
       if (!isSlash && confirmation && typeof confirmation.delete === 'function') {
@@ -438,27 +449,37 @@ async function composePanel(client, guild, member) {
 const __twemojiCache = new Map();
 
 function emojiToCodePoint(emoji) {
-  // Çoklu kod noktasını (surrogate pairs) '-' ile birleştirir
+  // Çoklu kod noktasını (surrogate pairs) '-' ile birleştirir ve BMP kod noktalarını 4 hane olacak şekilde 0 ile pad eder
   return Array.from(emoji)
-    .map(ch => ch.codePointAt(0).toString(16))
-    .join('-')
-    .toLowerCase();
+    .map(ch => {
+      const cp = ch.codePointAt(0);
+      let hex = cp.toString(16).toLowerCase();
+      if (cp <= 0xffff) hex = hex.padStart(4, '0');
+      return hex;
+    })
+    .join('-');
 }
 
 async function loadTwemojiImage(emoji) {
   try {
     if (__twemojiCache.has(emoji)) return __twemojiCache.get(emoji);
-    const code = emojiToCodePoint(emoji);
+    const codeFull = emojiToCodePoint(emoji);
+    // Bazı emojilerde Twemoji dosya adında FE0F varyasyon seçicisi olmayabiliyor.
+    const codeNoFE0F = codeFull.split('-').filter(p => p !== 'fe0f').join('-');
+    const candidateCodes = [...new Set([codeFull, codeNoFE0F])];
     // Birkaç farklı CDN dene (bazı ortamlarda ağ kısıtları olabilir)
-    const urls = [
-      `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/${code}.png`,
-      `https://twemoji.maxcdn.com/v/latest/72x72/${code}.png`,
-      `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${code}.png`
+    const cdnBases = [
+      'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72',
+      'https://twemoji.maxcdn.com/v/latest/72x72',
+      'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72'
     ];
     const { loadImage } = require('canvas');
     let img = null;
-    for (const u of urls) {
-      try { img = await loadImage(u); break; } catch { img = null; }
+    outer: for (const code of candidateCodes) {
+      for (const base of cdnBases) {
+        const u = `${base}/${code}.png`;
+        try { img = await loadImage(u); break outer; } catch { img = null; }
+      }
     }
     if (!img) throw new Error('twemoji-load-failed');
     __twemojiCache.set(emoji, img);

@@ -90,17 +90,7 @@ module.exports = (client) => {
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
-      // Slash ile tetiklendiğinde, sunucuda bir prefix ayarlıysa kullanıcıya bilgilendirici uyarı göster (ephemeral)
-      try {
-        const { getPrefix } = require('./config');
-        const px = getPrefix(interaction.guildId);
-        if (px && px !== '/') {
-          const tip = `ℹ️ Bu sunucuda prefix komutları da etkin: \
-> Örn: \`${px}${interaction.commandName}\`\n> Prefix'i değiştirmek için: \`/prefix yeni:<yeniPrefix>\``;
-          // Sadece bilgi amaçlı; ana komut yanıtı devam eder
-          interaction.followUp?.({ content: tip, ephemeral: true }).catch(()=>{});
-        }
-      } catch {}
+      // Prefix ipucu gönderimini komut çalıştıktan sonra yapacağız (replied/deferred durumuna göre reply/followUp seçeceğiz)
       
       // SÜPER GÜÇLÜ SLASH KOMUT EXECUTION KONTROLÜ
       if (!client._slashExecutions) client._slashExecutions = new Set();
@@ -145,6 +135,19 @@ module.exports = (client) => {
         };
 
         await command.execute(ctx, []);
+        // Slash ile tetiklendiğinde, sunucuda bir prefix ayarlıysa kullanıcıya bilgilendirici uyarı göster (ephemeral)
+        try {
+          const { getPrefix } = require('./config');
+          const px = getPrefix(interaction.guildId);
+          if (px && px !== '/') {
+            const tip = `ℹ️ Bu sunucuda prefix komutları da etkin: \n> Örn: \`${px}${interaction.commandName}\`\n> Prefix'i değiştirmek için: \`/prefix yeni:<yeniPrefix>\``;
+            if (interaction.replied || interaction.deferred) {
+              await interaction.followUp({ content: tip, ephemeral: true }).catch(()=>{});
+            } else {
+              await interaction.reply({ content: tip, ephemeral: true }).catch(()=>{});
+            }
+          }
+        } catch {}
       } catch (error) {
         console.error('[SLASH COMMAND ERROR]', error);
         const errorMsg = { content: 'Bir hata oluştu.', ephemeral: true };
