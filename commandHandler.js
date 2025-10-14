@@ -90,6 +90,17 @@ module.exports = (client) => {
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
+      // Slash ile tetiklendiğinde, sunucuda bir prefix ayarlıysa kullanıcıya bilgilendirici uyarı göster (ephemeral)
+      try {
+        const { getPrefix } = require('./config');
+        const px = getPrefix(interaction.guildId);
+        if (px && px !== '/') {
+          const tip = `ℹ️ Bu sunucuda prefix komutları da etkin: \
+> Örn: \`${px}${interaction.commandName}\`\n> Prefix'i değiştirmek için: \`/prefix yeni:<yeniPrefix>\``;
+          // Sadece bilgi amaçlı; ana komut yanıtı devam eder
+          interaction.followUp?.({ content: tip, ephemeral: true }).catch(()=>{});
+        }
+      } catch {}
       
       // SÜPER GÜÇLÜ SLASH KOMUT EXECUTION KONTROLÜ
       if (!client._slashExecutions) client._slashExecutions = new Set();
@@ -119,21 +130,20 @@ module.exports = (client) => {
       }, 5000);
       
       try {
-        // Slash komut için ctx wrapper oluştur
-        const ctx = {
-          ...interaction,
-          isCommand: () => true, // Bu slash komut
-          author: interaction.user, // Prefix uyumluluğu için
-          reply: async (content) => {
-            content = normalizeEphemeral(content);
-            if (interaction.replied || interaction.deferred) {
-              return await interaction.followUp(content);
-            } else {
-              return await interaction.reply(content);
-            }
+        // Slash komut için ctx: Interaction örneğini koru (prototype yöntemleri kaybolmasın)
+  const ctx = interaction;
+        ctx.isCommand = () => true; // Bu slash komut
+        ctx.author = interaction.user; // Prefix uyumluluğu için
+        const origReply = interaction.reply.bind(interaction);
+        ctx.reply = async (content) => {
+          content = normalizeEphemeral(content);
+          if (interaction.replied || interaction.deferred) {
+            return await interaction.followUp(content);
+          } else {
+            return await origReply(content);
           }
         };
-        
+
         await command.execute(ctx, []);
       } catch (error) {
         console.error('[SLASH COMMAND ERROR]', error);

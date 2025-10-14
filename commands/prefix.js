@@ -78,6 +78,11 @@ module.exports = {
       const msg = '❌ Prefix boşluk içeremez.';
       return isSlash ? ctx.reply({ content: msg, ephemeral: true }) : ctx.reply(msg);
     }
+    // Discord istemcisi '/' ile başlayan mesajları slash komut arayüzüne yönlendirir; bu yüzden '/' prefix olarak kullanılamaz.
+    if (newPrefix === '/' || newPrefix.startsWith('/')) {
+      const msg = '❌ "/" prefix olarak kullanılamaz. Discord, "/" ile başlayan mesajları slash komut arayüzüne yönlendirir. Lütfen başka bir prefix seçin (örn: ".", "!", "?") veya komutlar için doğrudan slash kullanın.';
+      return isSlash ? ctx.reply({ content: msg, ephemeral: true }) : ctx.reply(msg);
+    }
     if (newPrefix === current) {
       const msg = '❌ Girdiğin prefix zaten kullanılıyor.';
       return isSlash ? ctx.reply({ content: msg, ephemeral: true }) : ctx.reply(msg);

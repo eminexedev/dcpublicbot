@@ -37,7 +37,7 @@ async function ensureTriggerChannel(guild) {
 }
 
 module.exports = (client) => {
-  if (!client.privateVoice) client.privateVoice = { created: new Set(), owners: new Map() };
+  if (!client.privateVoice) client.privateVoice = { created: new Set(), owners: new Map(), textMap: new Map(), waitingMap: new Map() };
   // Client ready olduğunda her guild için tetikleyici kanalı kontrol et/oluştur
   client.once('clientReady', async () => {
     for (const [, guild] of client.guilds.cache) {
@@ -112,6 +112,31 @@ module.exports = (client) => {
       client.privateVoice.created.add(newChannel.id);
       client.privateVoice.owners.set(newChannel.id, member.id);
 
+      // İsteğe bağlı metin kanalı ve bekleme odası
+      try {
+        if (cfg.createTextChannel) {
+          const textName = `${member.displayName}-sohbet`;
+          const textCh = await guild.channels.create({
+            name: textName,
+            type: ChannelType.GuildText,
+            parent: parentId ?? undefined,
+            reason: 'Özel oda metin kanalı'
+          });
+          client.privateVoice.textMap.set(newChannel.id, textCh.id);
+        }
+        if (cfg.createWaitingRoom) {
+          const waitName = `${member.displayName}-bekleme`;
+          const waitCh = await guild.channels.create({
+            name: waitName,
+            type: ChannelType.GuildVoice,
+            parent: parentId ?? undefined,
+            userLimit: 0,
+            reason: 'Özel oda bekleme odası'
+          });
+          client.privateVoice.waitingMap.set(newChannel.id, waitCh.id);
+        }
+      } catch {}
+
       // Kullanıcıyı yeni kanala taşı
       await member.voice.setChannel(newChannel).catch(() => {});
 
@@ -154,6 +179,18 @@ module.exports = (client) => {
       if (oldState.client?.privateVoice) {
         oldState.client.privateVoice.created.delete(channel.id);
         oldState.client.privateVoice.owners.delete(channel.id);
+        const textId = oldState.client.privateVoice.textMap.get(channel.id);
+        if (textId) {
+          const tch = oldState.guild.channels.cache.get(textId);
+          if (tch) await tch.delete('İlişkili özel oda silindi.').catch(()=>{});
+          oldState.client.privateVoice.textMap.delete(channel.id);
+        }
+        const waitId = oldState.client.privateVoice.waitingMap.get(channel.id);
+        if (waitId) {
+          const wch = oldState.guild.channels.cache.get(waitId);
+          if (wch) await wch.delete('İlişkili özel oda silindi.').catch(()=>{});
+          oldState.client.privateVoice.waitingMap.delete(channel.id);
+        }
       }
 
       const guild = oldState.guild;
