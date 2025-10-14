@@ -434,9 +434,43 @@ async function composePanel(client, guild, member) {
   return { embed, rows: [adminRow, userRow1, userRow2, userRow3], files };
 }
 
+// Basit twemoji önbelleği (aynı emojiyi tekrar tekrar indirmemek için)
+const __twemojiCache = new Map();
+
+function emojiToCodePoint(emoji) {
+  // Çoklu kod noktasını (surrogate pairs) '-' ile birleştirir
+  return Array.from(emoji)
+    .map(ch => ch.codePointAt(0).toString(16))
+    .join('-')
+    .toLowerCase();
+}
+
+async function loadTwemojiImage(emoji) {
+  try {
+    if (__twemojiCache.has(emoji)) return __twemojiCache.get(emoji);
+    const code = emojiToCodePoint(emoji);
+    // Birkaç farklı CDN dene (bazı ortamlarda ağ kısıtları olabilir)
+    const urls = [
+      `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/${code}.png`,
+      `https://twemoji.maxcdn.com/v/latest/72x72/${code}.png`,
+      `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${code}.png`
+    ];
+    const { loadImage } = require('canvas');
+    let img = null;
+    for (const u of urls) {
+      try { img = await loadImage(u); break; } catch { img = null; }
+    }
+    if (!img) throw new Error('twemoji-load-failed');
+    __twemojiCache.set(emoji, img);
+    return img;
+  } catch {
+    return null; // ağ/emoji bulunamadı: metin fallback
+  }
+}
+
 async function renderGuideImage() {
   try {
-    const { createCanvas, loadImage } = require('canvas');
+    const { createCanvas } = require('canvas');
     const items = [
       { icon: '📝', text: 'ODA İSMİ' },
       { icon: '👥', text: 'ODA LİMİTİ' },
@@ -466,6 +500,9 @@ async function renderGuideImage() {
     ctx.fillStyle = '#2b2d31';
     ctx.fillRect(0, 0, width, height);
 
+    // Twemoji ikonlarını önceden yükle
+    const iconImages = await Promise.all(items.map(i => loadTwemojiImage(i.icon)));
+
     // Buton çizimi
     ctx.textBaseline = 'middle';
     let i = 0;
@@ -477,19 +514,26 @@ async function renderGuideImage() {
         ctx.fillStyle = '#1e1f22';
         roundRect(ctx, x, y, btnW, btnH, 12);
         const item = items[i++] || { icon: '', text: '' };
-        // ikon
-        ctx.textAlign = 'left';
-        ctx.font = '24px sans-serif';
-        ctx.fillStyle = '#ffffff';
         const iconX = x + 16;
-        const iconY = y + btnH/2;
-        ctx.fillText(item.icon, iconX, iconY);
+        const iconY = y + (btnH - 32)/2;
+        // ikon (twemoji img varsa onu kullan, yoksa metin fallback)
+        const iconImg = iconImages[i-1];
+        if (iconImg) {
+          ctx.drawImage(iconImg, iconX, iconY, 32, 32);
+        } else {
+          ctx.textAlign = 'left';
+          ctx.font = '24px sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(item.icon, iconX, y + btnH/2);
+        }
         // metin
+        ctx.textAlign = 'left';
         ctx.font = 'bold 18px sans-serif';
-        const textX = x + 52;
+        ctx.fillStyle = '#ffffff';
+        const textX = x + 56;
         const lines = (item.text || '').split('\n');
         if (lines.length === 1) {
-          ctx.fillText(lines[0], textX, iconY);
+          ctx.fillText(lines[0], textX, y + btnH/2);
         } else {
           ctx.fillText(lines[0], textX, y + btnH/2 - 11);
           ctx.fillText(lines[1], textX, y + btnH/2 + 11);
