@@ -88,6 +88,7 @@ module.exports = (client) => {
       console.warn('[EPHEMERAL PATCH WARN]', e?.message);
     }
     if (interaction.isChatInputCommand()) {
+      interaction.client.metrics && (interaction.client.metrics.slash++);
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
       // Prefix ipucu gönderimini komut çalıştıktan sonra yapacağız (replied/deferred durumuna göre reply/followUp seçeceğiz)
@@ -120,6 +121,7 @@ module.exports = (client) => {
       }, 5000);
       
       try {
+        const __start = Date.now();
         // Slash komut için ctx: Interaction örneğini koru (prototype yöntemleri kaybolmasın)
   const ctx = interaction;
         ctx.isCommand = () => true; // Bu slash komut
@@ -135,6 +137,24 @@ module.exports = (client) => {
         };
 
         await command.execute(ctx, []);
+        // Süre ölçümü kayıt
+        try {
+          const elapsed = Date.now() - __start;
+          const name = interaction.commandName || 'unknown';
+          const metrics = interaction.client.metrics || (interaction.client.metrics = {});
+          metrics.totalCommandCount = (metrics.totalCommandCount || 0) + 1;
+          metrics.totalCommandMs = (metrics.totalCommandMs || 0) + elapsed;
+          if (!metrics.commandTimings) metrics.commandTimings = {};
+          const rec = metrics.commandTimings[name] || (metrics.commandTimings[name] = { count: 0, totalMs: 0 });
+          rec.count += 1;
+          rec.totalMs += elapsed;
+        } catch {}
+        // Komut bazlı sayaç (slash)
+        try {
+          const name = interaction.commandName || 'unknown';
+          const map = interaction.client.metrics?.commandUsage || (interaction.client.metrics.commandUsage = {});
+          map[name] = (map[name] || 0) + 1;
+        } catch {}
         // Slash ile tetiklendiğinde, sunucuda bir prefix ayarlıysa kullanıcıya bilgilendirici uyarı göster (ephemeral)
         try {
           const { getPrefix } = require('./config');
@@ -149,7 +169,8 @@ module.exports = (client) => {
           }
         } catch {}
       } catch (error) {
-        console.error('[SLASH COMMAND ERROR]', error);
+  console.error('[SLASH COMMAND ERROR]', error);
+  interaction.client.metrics && (interaction.client.metrics.errors++);
         const errorMsg = { content: 'Bir hata oluştu.', ephemeral: true };
         if (interaction.replied || interaction.deferred) {
           await interaction.followUp(errorMsg);
@@ -160,6 +181,7 @@ module.exports = (client) => {
     }
     // Çekiliş butonları
     if (interaction.isButton() && interaction.customId === 'join_giveaway') {
+      interaction.client.metrics && (interaction.client.metrics.buttons++);
       const cekilis = client.commands.get('cekilis');
       if (cekilis && cekilis.handleButton) {
         await cekilis.handleButton(interaction);
@@ -167,6 +189,7 @@ module.exports = (client) => {
     }
     // Özel oda panel butonları
     if (interaction.isButton && typeof interaction.isButton === 'function' ? interaction.isButton() : interaction.isButton) {
+      interaction.client.metrics && (interaction.client.metrics.buttons++);
       if (interaction.customId && interaction.customId.startsWith('pv:')) {
         const ozeloda = client.commands.get('ozeloda');
         if (ozeloda && ozeloda.handleButton) {
@@ -180,6 +203,7 @@ module.exports = (client) => {
     }
     // Yardım menüsü butonları
     if (interaction.isButton() && (interaction.customId === 'help_user' || interaction.customId === 'help_mod')) {
+      interaction.client.metrics && (interaction.client.metrics.buttons++);
       const yardim = client.commands.get('yardım');
       if (yardim && yardim.handleButton) {
         try {
@@ -191,6 +215,7 @@ module.exports = (client) => {
     }
     // rollog sayfalama butonları
     if (interaction.isButton && typeof interaction.isButton === 'function' ? interaction.isButton() : interaction.isButton) {
+      interaction.client.metrics && (interaction.client.metrics.buttons++);
       if (interaction.customId && interaction.customId.startsWith('rollog:')) {
         const rollog = client.commands.get('rollog');
         if (rollog && rollog.handleButton) {
@@ -207,7 +232,8 @@ module.exports = (client) => {
       (interaction.isStringSelectMenu && interaction.customId === 'prefix_select') ||
       (typeof interaction.isStringSelectMenu === 'function' && interaction.isStringSelectMenu() && interaction.customId === 'prefix_select')
     ) {
-      const prefix = client.commands.get('prefix');
+  interaction.client.metrics && (interaction.client.metrics.selects++);
+  const prefix = client.commands.get('prefix');
       if (prefix && prefix.handleSelect) {
         await prefix.handleSelect(interaction);
       }
@@ -244,7 +270,8 @@ module.exports = (client) => {
         client._selectMenuExecutions.delete(selectKey);
       }, 5000);
       
-      const mute = client.commands.get('mute');
+  interaction.client.metrics && (interaction.client.metrics.selects++);
+  const mute = client.commands.get('mute');
       if (mute && mute.handleSelectMenu) {
         await mute.handleSelectMenu(interaction);
       }
@@ -276,7 +303,8 @@ module.exports = (client) => {
         client._selectMenuExecutions.delete(selectKey);
       }, 5000);
 
-      const ban = client.commands.get('ban');
+  interaction.client.metrics && (interaction.client.metrics.selects++);
+  const ban = client.commands.get('ban');
       if (ban && ban.handleSelectMenu) {
         try { await ban.handleSelectMenu(interaction); } catch (e) { console.error('[BAN SELECT ERROR]', e); }
       }
@@ -314,7 +342,8 @@ module.exports = (client) => {
         client._selectMenuExecutions.delete(selectKey);
       }, 5000);
       
-      const jail = client.commands.get('jail');
+  interaction.client.metrics && (interaction.client.metrics.selects++);
+  const jail = client.commands.get('jail');
       if (jail && jail.handleSelectMenu) {
         await jail.handleSelectMenu(interaction);
       }
@@ -324,7 +353,8 @@ module.exports = (client) => {
       (interaction.isStringSelectMenu && interaction.customId && interaction.customId.startsWith('kayit_')) ||
       (typeof interaction.isStringSelectMenu === 'function' && interaction.isStringSelectMenu() && interaction.customId && interaction.customId.startsWith('kayit_'))
     ) {
-      const kayit = client.commands.get('kayıt');
+  interaction.client.metrics && (interaction.client.metrics.selects++);
+  const kayit = client.commands.get('kayıt');
       if (kayit && kayit.handleSelectMenu) {
         await kayit.handleSelectMenu(interaction);
       }
@@ -338,7 +368,8 @@ module.exports = (client) => {
     }
     // Özel oda rename modal
     if (interaction.isModalSubmit && interaction.customId === 'pv:modal:rename') {
-      const ozeloda = client.commands.get('ozeloda');
+  interaction.client.metrics && (interaction.client.metrics.modals++);
+  const ozeloda = client.commands.get('ozeloda');
       if (ozeloda && ozeloda.handleModal) {
         try { await ozeloda.handleModal(interaction); } catch (e) { console.error('[OZELODA MODAL ERROR]', e); }
       }
@@ -463,6 +494,7 @@ module.exports = (client) => {
     }, 5000);
 
     try {
+      const __start = Date.now();
       // Context ve args'ı gönder
       const ctx = {
         message: message,
@@ -485,9 +517,29 @@ module.exports = (client) => {
         }
       };
       
+      message.client.metrics && (message.client.metrics.prefix++);
       await command.execute(ctx, args);
+      // Süre ölçümü kayıt
+      try {
+        const elapsed = Date.now() - __start;
+        const name = command?.data?.name || commandName || 'unknown';
+        const metrics = message.client.metrics || (message.client.metrics = {});
+        metrics.totalCommandCount = (metrics.totalCommandCount || 0) + 1;
+        metrics.totalCommandMs = (metrics.totalCommandMs || 0) + elapsed;
+        if (!metrics.commandTimings) metrics.commandTimings = {};
+        const rec = metrics.commandTimings[name] || (metrics.commandTimings[name] = { count: 0, totalMs: 0 });
+        rec.count += 1;
+        rec.totalMs += elapsed;
+      } catch {}
+      // Komut bazlı sayaç (prefix)
+      try {
+        const name = command?.data?.name || commandName || 'unknown';
+        const map = message.client.metrics?.commandUsage || (message.client.metrics.commandUsage = {});
+        map[name] = (map[name] || 0) + 1;
+      } catch {}
     } catch (error) {
       console.error('[COMMAND ERROR]', error);
+      message.client.metrics && (message.client.metrics.errors++);
       await message.reply('Bir hata oluştu.');
     }
   });

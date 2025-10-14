@@ -1,6 +1,67 @@
 // Discord botunun ana dosyası
 require('@dotenvx/dotenvx').config()
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
+const os = require('os');
+const DEBUG_SHUTDOWN = process.env.DEBUG_SHUTDOWN === '1';
+
+// Global log ayarları
+const GLOBAL_LOG_CHANNEL_ID = '1427764280454807623';
+let __globalLogReady = false;
+let __globalLogQueue = [];
+let __globalLogChannel = null; // Hazır olduğunda cache'lenecek
+let __shuttingDown = false;
+
+async function sendGlobalLog(client, content) {
+  try {
+    if (!content) return;
+    let payloadObj = null;
+    if (typeof content === 'string') {
+      const prefix = `📜 [${new Date().toISOString()}]`;
+      const body = `${prefix} ${content}`;
+      const payload = body.length > 1900 ? body.slice(0, 1900) + ' … [truncated]' : body;
+      payloadObj = { content: payload };
+    } else if (typeof content === 'object') {
+      payloadObj = content;
+    } else {
+      payloadObj = { content: String(content) };
+    }
+    let sent = false;
+    // 1) Gateway üzerinden (mevcut client) dene
+    try {
+      let channel = __globalLogChannel || client?.channels?.cache?.get(GLOBAL_LOG_CHANNEL_ID);
+      if (!channel && client) {
+        channel = await client.channels.fetch(GLOBAL_LOG_CHANNEL_ID).catch(()=>null);
+        if (channel) __globalLogChannel = channel;
+      }
+      if (channel) {
+        // Debug
+        // console.log('[GLOBAL-LOG] Sending via gateway...');
+        await channel.send(payloadObj);
+        sent = true;
+      }
+    } catch {}
+    // 2) REST fallback (client kapalı olsa bile token ile gönder)
+    if (!sent) {
+      try {
+        const { REST, Routes } = require('discord.js');
+        const rest = new REST({ version: '10', timeout: 15000 }).setToken(process.env.TOKEN);
+        // REST, content boşsa body'de content alanı olmadan da kabul eder; embeds varsa direkt göndeririz
+        // console.log('[GLOBAL-LOG] Sending via REST fallback...');
+        await rest.post(Routes.channelMessages(GLOBAL_LOG_CHANNEL_ID), { body: payloadObj });
+        sent = true;
+      } catch (e) {
+        if (DEBUG_SHUTDOWN) console.error('[GLOBAL-LOG REST ERROR]', e?.message || e);
+      }
+    }
+    if (!sent) {
+      // Client hazır değil ya da REST gönderimi başarısız—sıraya al (yalnızca kısa metin)
+      __globalLogQueue.push(typeof payloadObj.content === 'string' ? payloadObj.content : '[embed]');
+    }
+  } catch (e) {
+    // En kötü ihtimalle konsola yaz
+    console.error('[GLOBAL-LOG ERROR]', e?.message);
+  }
+}
 
 const client = new Client({
   intents: [
@@ -21,6 +82,42 @@ const client = new Client({
     large_threshold: 50, // Optimize edilmiş guild threshold
   }
 });
+// VSCode/cmd gibi ortamlarda SIGINT yakalanmıyorsa, Ctrl+C keypress fallback
+function setupCtrlCKeyListener() {
+  try {
+    if (!process.stdin || !process.stdin.isTTY) return;
+    if (process.stdin._ctrlCHandled) return;
+    const readline = require('readline');
+    readline.emitKeypressEvents(process.stdin);
+    try { process.stdin.setRawMode(true); } catch {}
+    process.stdin._ctrlCHandled = true;
+    process.stdin.on('keypress', (str, key) => {
+      if (key && key.ctrl && key.name === 'c') {
+        if (DEBUG_SHUTDOWN) console.log('[SHUTDOWN] CTRL+C keypress yakalandı');
+        gracefulShutdown('CTRL+C');
+      }
+    });
+  } catch (e) {
+    console.warn('[CTRL+C FALLBACK WARN]', e?.message);
+  }
+}
+
+
+// Basit metrik toplayıcı
+client.metrics = {
+  since: Date.now(),
+  slash: 0,
+  prefix: 0,
+  buttons: 0,
+  selects: 0,
+  modals: 0,
+  errors: 0,
+  commandUsage: {},
+  // Tepki süresi ölçümü için
+  totalCommandCount: 0,
+  totalCommandMs: 0,
+  commandTimings: {}, // { [commandName]: { count: number, totalMs: number } }
+};
 
 // İstatistik kanalı güncelleme
 const { getStatsChannels } = require('./statsConfig');
@@ -53,8 +150,22 @@ async function updateStatsChannels(guild) {
 
 client.on('guildMemberAdd', member => updateStatsChannels(member.guild));
 client.on('guildMemberRemove', member => updateStatsChannels(member.guild));
-client.once('clientReady', async () => {
+client.once('ready', async () => {
   console.log('✅ Client ready event tetiklendi. Giriş yapan bot:', client.user?.tag);
+  __globalLogReady = true;
+  // Global log kanalını önceden al ve cache'le
+  try {
+    __globalLogChannel = client.channels.cache.get(GLOBAL_LOG_CHANNEL_ID) || await client.channels.fetch(GLOBAL_LOG_CHANNEL_ID).catch(()=>null);
+  } catch {}
+  // Kuyruktaki logları gönder
+  if (__globalLogQueue.length) {
+    for (const msg of __globalLogQueue.splice(0)) {
+      await sendGlobalLog(client, msg);
+    }
+  }
+  await sendGlobalLog(client, `✅ Bot hazır: ${client.user?.tag}`);
+  // Saatlik durum logları planla
+  scheduleHourlyLogs(client);
   console.log('🔍 Aktif intentler:', client.options.intents.bitfield?.toString());
   const { getPrefix } = require('./config');
   require('./events/ready')(client, getPrefix);
@@ -62,6 +173,72 @@ client.once('clientReady', async () => {
   client.guilds.cache.forEach(guild => updateStatsChannels(guild));
   await deployCommands();
 });
+
+function scheduleHourlyLogs(client) {
+  const toMb = (b) => (b / (1024 * 1024)).toFixed(1);
+  const fmtUptime = (s) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return `${h}h ${m}m`;
+  };
+  const sendStatus = async () => {
+    try {
+      const mem = process.memoryUsage();
+      const guilds = client.guilds.cache.size;
+      const ping = Math.round(client.ws.ping || 0);
+      const uptime = fmtUptime(process.uptime());
+      const load = os.loadavg?.() || [0,0,0];
+      const cpus = os.cpus?.() || [];
+      const cpuModel = cpus[0]?.model || 'n/a';
+      // Basit CPU kullanım yüzdesi tahmini (1 dakikalık loadavg / CPU sayısı)
+      const cpuCount = Math.max(1, cpus.length || 1);
+      const cpuPct = Math.min(100, Math.max(0, (load[0] / cpuCount) * 100)).toFixed(0);
+      const m = client.metrics || { slash:0,prefix:0,buttons:0,selects:0,modals:0,errors:0 };
+      const usage = Object.entries(m.commandUsage || {}).sort((a,b)=>b[1]-a[1]).slice(0,10);
+      const topLines = usage.length
+        ? usage.map(([name,count]) => {
+            const t = m.commandTimings?.[name];
+            const avg = t && t.count ? Math.round(t.totalMs / t.count) : '—';
+            return `• ${name}: ${count}x, avg ${avg}ms`;
+          }).join('\n')
+        : '—';
+
+      const overallAvg = m.totalCommandCount ? Math.round(m.totalCommandMs / m.totalCommandCount) : null;
+      const embed = {
+        title: '⏰ Saatlik Durum Raporu',
+        color: 0x5865F2,
+        timestamp: new Date(),
+        fields: [
+          { name: 'Sistem', value: `Sunucular: ${guilds}\nPing: ${ping}ms\nUptime: ${uptime}`, inline: true },
+          { name: 'Bellek', value: `RSS: ${toMb(mem.rss)}MB\nHeap: ${toMb(mem.heapUsed)}MB`, inline: true },
+          { name: 'CPU', value: `${cpuPct}%\n${cpuModel}`, inline: true },
+          { name: 'Etkileşim', value: `Slash: ${m.slash}\nPrefix: ${m.prefix}\nButtons: ${m.buttons}\nSelects: ${m.selects}\nModals: ${m.modals}\nErrors: ${m.errors}`, inline: true },
+          { name: 'Komut Ort. Tepki', value: overallAvg !== null ? `${overallAvg}ms (${m.totalCommandCount} komut)` : '—', inline: true },
+          { name: 'Top-10 Komut', value: topLines, inline: false },
+        ]
+      };
+      await sendGlobalLog(client, { embeds: [embed] });
+      // Sayaçları saatlik sıfırla (kümülatif istiyorsan kaldırabiliriz)
+      client.metrics.slash = 0;
+      client.metrics.prefix = 0;
+      client.metrics.buttons = 0;
+      client.metrics.selects = 0;
+      client.metrics.modals = 0;
+      client.metrics.errors = 0;
+      client.metrics.commandUsage = {};
+      client.metrics.totalCommandCount = 0;
+      client.metrics.totalCommandMs = 0;
+      client.metrics.commandTimings = {};
+    } catch (e) {
+      console.error('[HOURLY-LOG ERROR]', e?.message);
+    }
+  };
+  // İlkini 5 dk sonra, sonra her saat başı
+  setTimeout(() => {
+    sendStatus();
+    setInterval(sendStatus, 60 * 60 * 1000);
+  }, 5 * 60 * 1000);
+}
 
 // Otomatik log kanalı sistemi
 const { getAutoLogChannel, setAutoLogChannel } = require('./config');
@@ -147,8 +324,10 @@ require('./events/privateVoice')(client);
 async function startBot() {
   try {
     console.log('Bot Discord\'a bağlanıyor...');
+    await sendGlobalLog(client, '🚀 Bot başlatılıyor, Discord\'a bağlanıyor...');
     await client.login(process.env.TOKEN);
     console.log('✅ Bot başarıyla Discord\'a bağlandı!');
+    await sendGlobalLog(client, '✅ Bot başarıyla Discord\'a bağlandı!');
     if (!client.options.intents.has?.(GatewayIntentBits.GuildVoiceStates)) {
       console.warn('⚠️ GuildVoiceStates intent aktif değil gibi görünüyor. Voice verileri toplanmayacak.');
     } else {
@@ -156,11 +335,13 @@ async function startBot() {
     }
   } catch (error) {
     console.error('❌ Bot Discord\'a bağlanırken hata:', error.message);
+    await sendGlobalLog(client, `❌ Giriş hatası: ${error.message || error}`);
     if (error.code === 'TokenInvalid') {
       console.error('Token geçersiz! .env dosyasındaki TOKEN değerini kontrol edin.');
     } else if (error.code === 'UND_ERR_CONNECT_TIMEOUT') {
       console.error('Bağlantı zaman aşımı! İnternet bağlantınızı kontrol edin.');
       console.log('5 saniye sonra tekrar denenecek...');
+      await sendGlobalLog(client, '⏳ Bağlantı zaman aşımı, 5 sn sonra tekrar denenecek...');
       setTimeout(startBot, 5000);
       return;
     }
@@ -169,6 +350,9 @@ async function startBot() {
 }
 
 startBot();
+
+// Ctrl+C keypress fallback kurulumu
+setupCtrlCKeyListener();
 
 require('./events/statsTracker')(client);
 try {
@@ -231,13 +415,15 @@ setTimeout(()=>{
 }, 30*1000);
 
 // Gelişmiş hata yakalama sistemi
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', async (error) => {
   console.error('❌ Yakalanmamış Exception:', error);
   console.error('Stack:', error.stack);
+  await sendGlobalLog(client, `🔥 uncaughtException: ${error?.message || error}`);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', async (reason, promise) => {
   console.error('❌ Beklenmeyen hata (unhandledRejection):', reason);
+  await sendGlobalLog(client, `❗ unhandledRejection: ${reason?.message || reason}`);
   
   // Özel hata türlerini yakala
   if (reason && reason.code) {
@@ -255,4 +441,51 @@ process.on('unhandledRejection', (reason, promise) => {
         console.error('Bilinmeyen hata kodu:', reason.code);
     }
   }
+});
+
+// Kapanış / yeniden başlatma logları
+async function gracefulShutdown(signal) {
+  if (__shuttingDown) return;
+  __shuttingDown = true;
+  const msg = signal ? `🛑 Bot kapanıyor...` : '🛑 Bot discorddan düştü';
+  if (DEBUG_SHUTDOWN) console.log('[SHUTDOWN] Handler tetiklendi:', signal || 'NO-SIGNAL');
+  // Önce kanalı refresh etmeyi dene (destroy öncesi)
+  try {
+    __globalLogChannel = client.channels.cache.get(GLOBAL_LOG_CHANNEL_ID) || await client.channels.fetch(GLOBAL_LOG_CHANNEL_ID).catch(()=>__globalLogChannel);
+  } catch {}
+  // Kapanış mesajını gönder ve mümkünse kuyruktakileri de boşalt
+  try {
+    if (DEBUG_SHUTDOWN) console.log('[SHUTDOWN] Kapanış logu gönderiliyor...');
+    await sendGlobalLog(client, msg);
+    if (__globalLogQueue.length) {
+      if (DEBUG_SHUTDOWN) console.log('[SHUTDOWN] Kuyrukta', __globalLogQueue.length, 'mesaj var, gönderiliyor...');
+      for (const q of __globalLogQueue.splice(0)) {
+        await sendGlobalLog(client, q);
+      }
+    }
+  } catch {}
+  // Ağın teslim etmesi için kısa bekleme (3.5s)
+  await new Promise(res => setTimeout(res, 4500));
+  try { await client.destroy(); } catch {}
+  // Son bir küçük bekleme, sonra çık
+  setTimeout(() => process.exit(0), 500);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+// Windows için Ctrl+Break
+process.on('SIGBREAK', () => gracefulShutdown('SIGBREAK'));
+// Bazı ortamlarda kapanış HUP ile gelebilir
+process.on('SIGHUP', () => gracefulShutdown('SIGHUP'));
+process.on('beforeExit', async (code) => {
+  try {
+    await Promise.race([
+      sendGlobalLog(client, `🛑 Process beforeExit: code=${code}`),
+      new Promise(res => setTimeout(res, 1500))
+    ]);
+  } catch {}
+});
+process.on('exit', (code) => {
+  // Bu aşamada async işlemler güvenilir değildir; konsola yazmakla yetinelim.
+  console.log(`[EXIT] code=${code}`);
 });
