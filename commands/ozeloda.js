@@ -193,14 +193,32 @@ module.exports = {
     if (!interaction.customId || !interaction.customId.startsWith('pv:')) return;
     const { guild, member, client } = interaction;
 
+    // Geçici yanıt yardımcı fonksiyonu: belirli süre sonra mesajı temizler veya siler
+    const tempReply = async (payload, ttl = 6000) => {
+      try {
+        const res = await interaction.reply(payload);
+        // Ephemeral ise içerik temizleme (silmek mümkün değil)
+        if (payload && payload.ephemeral) {
+          setTimeout(() => {
+            interaction.editReply({ content: ' ', embeds: [], components: [] }).catch(()=>{});
+          }, ttl);
+        } else if (res && typeof res.delete === 'function') {
+          setTimeout(() => res.delete().catch(()=>{}), ttl);
+        }
+        return res;
+      } catch (e) {
+        console.error('[OZELODA TEMP REPLY ERROR]', e?.message);
+      }
+    };
+
     const isAdminAction = ['toggle','autodelete'].includes(interaction.customId.split(':')[1]);
     if (isAdminAction) {
       if (!member?.permissions?.has(PermissionFlagsBits.Administrator)) {
-        return interaction.reply({ content: '❌ Bu paneli kullanmak için yönetici olmanız gerekir.', ephemeral: true });
+  return tempReply({ content: '❌ Bu paneli kullanmak için yönetici olmanız gerekir.', ephemeral: true });
       }
       const logId = getLogChannel(guild.id);
       if (!logId) {
-        return interaction.reply({ content: '❌ Önce log kanalı ayarlayın: /logkanal #kanal', ephemeral: true });
+  return tempReply({ content: '❌ Önce log kanalı ayarlayın: /logkanal #kanal', ephemeral: true });
       }
       const sub = interaction.customId.split(':')[1];
       const cfg = getPrivateVoiceConfig(guild.id);
@@ -214,7 +232,7 @@ module.exports = {
     if (interaction.customId === 'pv:refresh') {
       const logId = getLogChannel(guild.id);
       if (!logId) {
-        return interaction.reply({ content: '❌ Önce log kanalı ayarlansın: /logkanal #kanal', ephemeral: true });
+  return tempReply({ content: '❌ Önce log kanalı ayarlansın: /logkanal #kanal', ephemeral: true });
       }
       return await this._renderPanel(interaction, guild.id);
     }
@@ -223,16 +241,16 @@ module.exports = {
     const pv = client.privateVoice;
     const logIdReq = getLogChannel(guild.id);
     if (!logIdReq) {
-      return interaction.reply({ content: '❌ Sistem kilitli: Lütfen yöneticiler log kanalını ayarlasın: /logkanal #kanal', ephemeral: true });
+  return tempReply({ content: '❌ Sistem kilitli: Lütfen yöneticiler log kanalını ayarlasın: /logkanal #kanal', ephemeral: true });
     }
     const voice = member?.voice?.channel;
     if (!voice || !pv?.created.has(voice.id)) {
-      return interaction.reply({ content: '❌ Önce kendi özel ses kanalınızda olmalısınız.', ephemeral: true });
+  return tempReply({ content: '❌ Önce kendi özel ses kanalınızda olmalısınız.', ephemeral: true });
     }
     // Sahip kontrolü
     const ownerId = pv.owners.get(voice.id);
     if (ownerId !== member.id && !member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: '❌ Bu kanalı yönetme izniniz yok.', ephemeral: true });
+  return tempReply({ content: '❌ Bu kanalı yönetme izniniz yok.', ephemeral: true });
     }
 
     const parts = interaction.customId.split(':'); // örn: ['pv','u','limit','down']
@@ -253,7 +271,7 @@ module.exports = {
           const me = guild.members.me;
           const canManage = me?.permissionsIn(voice)?.has(PermissionFlagsBits.ManageChannels);
           if (!canManage) {
-            return interaction.reply({ content: '❌ Botun bu kanalda Kanalı Yönet (Manage Channels) izni yok.', ephemeral: true });
+            return tempReply({ content: '❌ Botun bu kanalda Kanalı Yönet (Manage Channels) izni yok.', ephemeral: true });
           }
           const dir = extra === 'up' ? 'up' : 'down';
           const curr = voice.userLimit || 0;
@@ -265,39 +283,39 @@ module.exports = {
           }
           try {
             await voice.setUserLimit(next);
-            return interaction.reply({ content: `✅ Kullanıcı limiti: ${next === 0 ? 'Sınırsız' : next}`, ephemeral: true });
+            return tempReply({ content: `✅ Kullanıcı limiti: ${next === 0 ? 'Sınırsız' : next}`, ephemeral: true });
           } catch (e) {
-            return interaction.reply({ content: `❌ Limit değiştirilemedi: ${e.message || 'bilinmeyen hata'}`, ephemeral: true });
+            return tempReply({ content: `❌ Limit değiştirilemedi: ${e.message || 'bilinmeyen hata'}`, ephemeral: true });
           }
         }
         if (action === 'lock') {
           await voice.permissionOverwrites.edit(guild.roles.everyone, { Connect: false }).catch(()=>{});
-          return interaction.reply({ content: '🔒 Kanal kilitlendi.', ephemeral: true });
+          return tempReply({ content: '🔒 Kanal kilitlendi.', ephemeral: true });
         }
         if (action === 'unlock') {
           await voice.permissionOverwrites.edit(guild.roles.everyone, { Connect: null }).catch(()=>{});
-          return interaction.reply({ content: '🔓 Kanal kilidi açıldı.', ephemeral: true });
+          return tempReply({ content: '🔓 Kanal kilidi açıldı.', ephemeral: true });
         }
         if (action === 'muteall') {
           for (const [, m] of voice.members) { if (m.manageable) await m.voice.setMute(true).catch(()=>{}); }
-          return interaction.reply({ content: '🔇 Herkes susturuldu.', ephemeral: true });
+          return tempReply({ content: '🔇 Herkes susturuldu.', ephemeral: true });
         }
         if (action === 'unmuteall') {
           for (const [, m] of voice.members) { if (m.manageable) await m.voice.setMute(false).catch(()=>{}); }
-          return interaction.reply({ content: '🔈 Herkesin sesi açıldı.', ephemeral: true });
+          return tempReply({ content: '🔈 Herkesin sesi açıldı.', ephemeral: true });
         }
         if (action === 'invite') {
           try {
             const invite = await voice.createInvite({ maxAge: 1800, maxUses: 5, reason: 'Özel oda davet' });
-            return interaction.reply({ content: `🔗 Davet bağlantısı (30dk/5 kullanımlık): ${invite.url}`, ephemeral: true });
+            return tempReply({ content: `🔗 Davet bağlantısı (30dk/5 kullanımlık): ${invite.url}`, ephemeral: true });
           } catch (e) {
-            return interaction.reply({ content: `❌ Davet oluşturulamadı: ${e.message || 'bilinmeyen hata'}`, ephemeral: true });
+            return tempReply({ content: `❌ Davet oluşturulamadı: ${e.message || 'bilinmeyen hata'}`, ephemeral: true });
           }
         }
         if (action === 'disconnect') {
           // Basit: Sahibi hariç herkesi at
           for (const [, m] of voice.members) { if (m.id !== member.id) await m.voice.disconnect().catch(()=>{}); }
-          return interaction.reply({ content: '🔌 Kullanıcılar kanaldan çıkarıldı (sahip hariç).', ephemeral: true });
+          return tempReply({ content: '🔌 Kullanıcılar kanaldan çıkarıldı (sahip hariç).', ephemeral: true });
         }
         if (action === 'region') {
           // Discord artık bölgeyi otomatik seçiyor; alternatif: RTC region override
@@ -307,36 +325,36 @@ module.exports = {
             const idx = regions.indexOf(curr);
             const next = regions[(idx + 1 + regions.length) % regions.length];
             await voice.setRTCRegion(next);
-            return interaction.reply({ content: `🌐 Bölge değiştirildi: ${next}`, ephemeral: true });
+            return tempReply({ content: `🌐 Bölge değiştirildi: ${next}`, ephemeral: true });
           } catch (e) {
-            return interaction.reply({ content: `❌ Bölge değiştirilemedi: ${e.message || 'bilinmeyen hata'}`, ephemeral: true });
+            return tempReply({ content: `❌ Bölge değiştirilemedi: ${e.message || 'bilinmeyen hata'}`, ephemeral: true });
           }
         }
         if (action === 'claim') {
           const ownerId = interaction.client.privateVoice.owners.get(voice.id);
           if (ownerId && ownerId !== member.id) {
             interaction.client.privateVoice.owners.set(voice.id, member.id);
-            return interaction.reply({ content: '👑 Oda sahipliği üzerinize alındı.', ephemeral: true });
+            return tempReply({ content: '👑 Oda sahipliği üzerinize alındı.', ephemeral: true });
           }
-          return interaction.reply({ content: 'ℹ️ Zaten sahibisiniz veya sahip yok.', ephemeral: true });
+          return tempReply({ content: 'ℹ️ Zaten sahibisiniz veya sahip yok.', ephemeral: true });
         }
         if (action === 'transfer') {
           // En basit hali: Sahip harici ilk kullanıcıya devret
           const target = [...voice.members.values()].find(m => m.id !== member.id);
-          if (!target) return interaction.reply({ content: '❌ Devredilecek bir kullanıcı bulunamadı.', ephemeral: true });
+          if (!target) return tempReply({ content: '❌ Devredilecek bir kullanıcı bulunamadı.', ephemeral: true });
           interaction.client.privateVoice.owners.set(voice.id, target.id);
-          return interaction.reply({ content: `➡️ Oda sahipliği ${target} kullanıcısına devredildi.`, ephemeral: true });
+          return tempReply({ content: `➡️ Oda sahipliği ${target} kullanıcısına devredildi.`, ephemeral: true });
         }
         if (action === 'moveout') {
           for (const [, m] of voice.members) { if (m.id !== member.id) await m.voice.disconnect().catch(()=>{}); }
-          return interaction.reply({ content: '↘️ Herkes kanaldan atıldı.', ephemeral: true });
+          return tempReply({ content: '↘️ Herkes kanaldan atıldı.', ephemeral: true });
         }
         if (action === 'delete') {
           await voice.delete('Sahibi tarafından panelden silindi.').catch(()=>{});
-          return interaction.reply({ content: '🗑️ Kanal silindi.', ephemeral: true });
+          return tempReply({ content: '🗑️ Kanal silindi.', ephemeral: true });
         }
       } catch (e) {
-        return interaction.reply({ content: `❌ İşlem başarısız: ${e.message || 'bilinmeyen hata'}`, ephemeral: true });
+  return tempReply({ content: `❌ İşlem başarısız: ${e.message || 'bilinmeyen hata'}`, ephemeral: true });
       }
     }
   },
@@ -392,7 +410,7 @@ async function composePanel(client, guild, member) {
   const embed = new EmbedBuilder()
     .setTitle('Özel Oda Kontrol Paneli')
     .setColor(0x5865F2)
-    .setDescription('• Yönetici satırı: sistemi aç/kapat, otomatik sil, yenile.\n• Kullanıcı satırı: kendi özel kanalını yeniden adlandır, limit değiştir, kilitle, herkesi sustur/aç, herkesi at, kanalı sil.')
+    .setDescription('Kullanım:\n📝 Ad değiştir | 👥➖ Limit azalt | 👥➕ Limit artır | 🛡️ Kilitle | 🔓 Kilidi aç | 🔇 Herkesi sustur | 🔈 Herkesin sesini aç | ↘️ Herkesi at | 🗑️ Sil | 🔗 Davet | 🔌 Kullanıcıyı kopar | 🌐 Bölge değiştir | 👑 Sahiplen | 🔄 Devret | ♻️ Embedi Yenile | 🟢 Aç | ⛔ Kapat | 🌀 Oto Sil Aç/Kapat')
     .addFields(
       { name: 'Durum', value: cfg.enabled ? 'Aktif' : 'Kapalı', inline: true },
       { name: 'Otomatik Sil', value: cfg.autoDelete ? 'Açık' : 'Kapalı', inline: true },
@@ -407,29 +425,29 @@ async function composePanel(client, guild, member) {
 
   const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
   const adminRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('pv:toggle').setLabel(cfg.enabled ? 'Kapat' : 'Aç').setStyle(cfg.enabled ? ButtonStyle.Danger : ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('pv:autodelete').setLabel(cfg.autoDelete ? 'Oto Sil: Kapalı' : 'Oto Sil: Açık').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:refresh').setLabel('Yenile').setStyle(ButtonStyle.Primary)
+    new ButtonBuilder().setCustomId('pv:toggle').setLabel(cfg.enabled ? '⛔' : '🟢').setStyle(cfg.enabled ? ButtonStyle.Secondary : ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('pv:autodelete').setLabel('🌀').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:refresh').setLabel('♻️').setStyle(ButtonStyle.Secondary)
   );
   const userRow1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('pv:u:rename').setLabel('Ad Değiştir').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:limit:down').setLabel('Limit -').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:limit:up').setLabel('Limit +').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:lock').setLabel('Kilitle').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:unlock').setLabel('Kilidi Aç').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId('pv:u:rename').setLabel('📝').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:limit:down').setLabel('👥➖').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:limit:up').setLabel('👥➕').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:lock').setLabel('🛡️').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:unlock').setLabel('🔓').setStyle(ButtonStyle.Secondary)
   );
   const userRow2 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('pv:u:muteall').setLabel('Herkesi Sustur').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:unmuteall').setLabel('Herkesin Sesini Aç').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:moveout').setLabel('Herkesi At').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId('pv:u:delete').setLabel('Kanalı Sil').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId('pv:u:muteall').setLabel('🔇').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:unmuteall').setLabel('🔈').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:moveout').setLabel('↘️').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:delete').setLabel('🗑️').setStyle(ButtonStyle.Secondary)
   );
   const userRow3 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('pv:u:invite').setLabel('Davet Bağlantısı').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:disconnect').setLabel('Kullanıcıyı Kopar').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:region').setLabel('Bölge Değiştir').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:claim').setLabel('Sahiplen').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:transfer').setLabel('Odayı Devret').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId('pv:u:invite').setLabel('🔗').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:disconnect').setLabel('🔌').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:region').setLabel('🌐').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:claim').setLabel('👑').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:transfer').setLabel('🔄').setStyle(ButtonStyle.Secondary)
   );
 
   // Kullanım kılavuzu görseli üret
@@ -496,7 +514,6 @@ async function renderGuideImage() {
       { icon: '📝', text: 'ODA İSMİ' },
       { icon: '👥', text: 'ODA LİMİTİ' },
       { icon: '🛡️', text: 'GİZLİLİK' },
-      { icon: '⏳', text: 'BEKLEME\nODASI' },
       { icon: '#️⃣', text: 'METİN\nKANALI' },
       { icon: '✅', text: 'GÜVENİLİR' },
       { icon: '⚠️', text: 'GÜVENSİZ' },
@@ -509,7 +526,8 @@ async function renderGuideImage() {
       { icon: '🔄', text: 'ODAYI\nDEVRET' },
       { icon: '🗑️', text: 'SİL' }
     ];
-    const cols = 5, rows = 3;
+    const cols = 5;
+    const rows = Math.ceil(items.length / cols); // Dinamik satır sayısı
     const btnW = 240, btnH = 64, gap = 18;
     const pad = 24;
     const width = pad*2 + cols*btnW + (cols-1)*gap;
@@ -527,10 +545,12 @@ async function renderGuideImage() {
     // Buton çizimi
     ctx.textBaseline = 'middle';
     let i = 0;
-    for (let r=0; r<rows; r++) {
+    outer: for (let r=0; r<rows; r++) {
       for (let c=0; c<cols; c++) {
         const x = pad + c*(btnW+gap);
         const y = pad + r*(btnH+gap);
+        // Item yoksa döngüyü bitir (boş kutu çizme)
+        if (i >= items.length) break outer;
         // buton
         ctx.fillStyle = '#1e1f22';
         roundRect(ctx, x, y, btnW, btnH, 12);
