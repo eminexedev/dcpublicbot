@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } = require('discord.js');
 const { getAutoLogChannel } = require('../config');
+const { addInfraction } = require('../utils/infractions');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -32,17 +33,21 @@ module.exports = {
       // Prefix komut
       guild = ctx.guild;
       reply = (msg) => ctx.message.reply(msg);
-      
+
       if (!args || args.length === 0) {
-        return ctx.message.reply('Bir kullanıcı etiketlemelisin veya ID girmelisin.');
+        return reply('Bir kullanıcı etiketlemelisin veya ID girmelisin.');
       }
-      
-      // Kullanıcıyı etiket veya ID ile bul
-      const idMatch = args[0].match(/(\d{17,})/);
-      const userId = idMatch ? idMatch[1] : null;
-      if (!userId) return ctx.message.reply('Geçerli bir kullanıcı etiketlemelisin veya ID girmelisin.');
-      
-      user = await guild.members.fetch(userId).then(m => m.user).catch(() => null);
+
+      // Mention veya düz ID yakala (sıkı desen)
+      const userMatch = args[0].match(/^<@!?(\d+)>$|^(\d+)$/);
+      const userId = userMatch ? (userMatch[1] || userMatch[2]) : null;
+      if (!userId) return reply('Geçerli bir kullanıcı etiketlemelisin veya ID girmelisin.');
+
+      // Önce User nesnesi çözümlensin (ID geçerli mi?)
+      const resolvedUser = await ctx.client.users.fetch(userId).catch(() => null);
+      if (!resolvedUser) return reply('Geçerli bir kullanıcı etiketlemelisin veya ID girmelisin.');
+
+      user = resolvedUser;
       reason = args.slice(1).join(' ') || 'Sebep belirtilmedi.';
     } else {
       return;
@@ -68,7 +73,7 @@ module.exports = {
     const member = await ctx.guild.members.fetch(user.id).catch(() => null);
     if (!member) {
       return ctx.reply({
-        content: 'Kullanıcı bulunamadı.',
+        content: 'Kullanıcı sunucuda bulunamadı.',
         flags: MessageFlags.Ephemeral
       });
     }
@@ -96,6 +101,15 @@ module.exports = {
     try {
       await member.kick(reason);
       await ctx.reply({ content: `✅ ${user.tag} başarıyla atıldı.\n📝 Sebep: ${reason}` });
+      // Sicil: kick kaydı
+      try {
+        addInfraction(ctx.guild.id, user.id, {
+          t: Date.now(),
+          type: 'kick',
+          reason,
+          executorId: ctx.user?.id || ctx.author?.id
+        });
+      } catch {}
       
       // Log
       const logChannelId = getAutoLogChannel(ctx.guild.id);

@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 const { getAutoLogChannel } = require('../config');
 const { getJailRole, getJailLogChannel, getUnjailLogChannel } = require('../config');
+const { addInfraction } = require('../utils/infractions');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -433,6 +434,17 @@ module.exports.handleSelectMenu = async (interaction) => {
       }
     }
     
+    // Sicil: jail kaydı
+    try {
+      addInfraction(interaction.guild.id, targetUserId, {
+        t: Date.now(),
+        type: 'jail',
+        reason: secenek.sebep,
+        executorId: interaction.user.id,
+        durationMin: secenek.sure
+      });
+    } catch {}
+
     // Jail verilerini saklama (basit bellekte - gerçek projelerde database kullanın)
     if (!global.jailedUsers) global.jailedUsers = new Map();
     global.jailedUsers.set(targetUserId, {
@@ -530,6 +542,16 @@ module.exports.handleSelectMenu = async (interaction) => {
             );
             
             await stillMember.roles.set(rolesToRestore, 'Jail süresi doldu - rolleri geri verildi');
+            // Sicil: otomatik unjail kaydı
+            try {
+              addInfraction(interaction.guild.id, targetUser.id, {
+                t: Date.now(),
+                type: 'unjail',
+                reason: 'Süre doldu (otomatik)',
+                executorId: interaction.client.user.id,
+                durationMin: secenek.sure
+              });
+            } catch {}
             global.jailedUsers?.delete(targetUserId);
             
             // Otomatik Unjail log - DETAYLI LOG SİSTEMİ

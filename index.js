@@ -150,7 +150,7 @@ async function updateStatsChannels(guild) {
 
 client.on('guildMemberAdd', member => updateStatsChannels(member.guild));
 client.on('guildMemberRemove', member => updateStatsChannels(member.guild));
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   console.log('✅ Client ready event tetiklendi. Giriş yapan bot:', client.user?.tag);
   __globalLogReady = true;
   // Global log kanalını önceden al ve cache'le

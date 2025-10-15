@@ -1,0 +1,32 @@
+{
+  "1417228003250798603": {
+    "1387877139352911952": [
+      {
+        "t": 1760543838829,
+        "type": "jail",
+        "reason": "⚠️ Ciddi İhlal",
+        "executorId": "1386063084530962534",
+        "durationMin": 360
+      },
+      {
+        "t": 1760544393407,
+        "type": "mute",
+        "reason": "😠 Kişiyi Kışkırtma",
+        "executorId": "1386063084530962534",
+        "durationMin": 5
+      },
+      {
+        "t": 1760544620410,
+        "type": "ban",
+        "reason": "Uygunsuz İçerik (NSFW)",
+        "executorId": "1386063084530962534"
+      },
+      {
+        "t": 1760544680253,
+        "type": "unban",
+        "reason": "Sebep belirtilmedi.",
+        "executorId": "1386063084530962534"
+      }
+    ]
+  }
+}

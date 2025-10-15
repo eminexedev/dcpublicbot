@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { findAnyLogChannel } = require('../config');
+const { addInfraction } = require('../utils/infractions');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -126,6 +127,16 @@ module.exports = {
         .setTimestamp();
       
       await reply({ embeds: [successEmbed] });
+
+      // Sicil: unban kaydı
+      try {
+        addInfraction(guild.id, banInfo.user.id, {
+          t: Date.now(),
+          type: 'unban',
+          reason: reason,
+          executorId: replyUser.id
+        });
+      } catch {}
       
       // Unban Log sistemi
       const logChannelId = findAnyLogChannel(guild.id);

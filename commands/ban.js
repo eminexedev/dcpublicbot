@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 const { findAnyLogChannel } = require('../config');
+const { addInfraction } = require('../utils/infractions');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -217,6 +218,15 @@ module.exports = {
           await logChannel.send({ embeds: [logEmbed] });
         }
       }
+      // Sicil: ban kaydı
+      try {
+        addInfraction(guild.id, user.id, {
+          t: Date.now(),
+          type: 'ban',
+          reason: reasonLabel,
+          executorId: interaction.user.id
+        });
+      } catch {}
     } catch (err) {
       console.error('Ban hatası:', err);
       return interaction.editReply({ content: '❌ Ban işlemi sırasında bir hata oluştu. Yetkileri ve hiyerarşiyi kontrol edin.' });

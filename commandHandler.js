@@ -213,6 +213,16 @@ module.exports = (client) => {
         }
       }
     }
+    // Sicil sayfalama butonları
+    if (interaction.isButton && (typeof interaction.isButton === 'function' ? interaction.isButton() : interaction.isButton)) {
+      interaction.client.metrics && (interaction.client.metrics.buttons++);
+      if (interaction.customId && interaction.customId.startsWith('sicil:')) {
+        const sicil = client.commands.get('sicil');
+        if (sicil && sicil.handleButton) {
+          try { await sicil.handleButton(interaction); } catch (e) { console.error('[SICIL BUTTON ERROR]', e); }
+        }
+      }
+    }
     // rollog sayfalama butonları
     if (interaction.isButton && typeof interaction.isButton === 'function' ? interaction.isButton() : interaction.isButton) {
       interaction.client.metrics && (interaction.client.metrics.buttons++);
@@ -238,10 +248,10 @@ module.exports = (client) => {
         await prefix.handleSelect(interaction);
       }
     }
-    // Mute seçim menüsü
+    // Mute seçim menüsü (eski: mute_<id>, yeni: mute:g=...;t=...;o=...)
     if (
-      (interaction.isStringSelectMenu && interaction.customId && interaction.customId.startsWith('mute_')) ||
-      (typeof interaction.isStringSelectMenu === 'function' && interaction.isStringSelectMenu() && interaction.customId && interaction.customId.startsWith('mute_'))
+      (interaction.isStringSelectMenu && interaction.customId && (interaction.customId.startsWith('mute_') || interaction.customId.startsWith('mute:'))) ||
+      (typeof interaction.isStringSelectMenu === 'function' && interaction.isStringSelectMenu() && interaction.customId && (interaction.customId.startsWith('mute_') || interaction.customId.startsWith('mute:')))
     ) {
       // SÜPER GÜÇLÜ SELECT MENU EXECUTION KONTROLÜ
       if (!client._selectMenuExecutions) client._selectMenuExecutions = new Set();

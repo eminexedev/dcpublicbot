@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, MessageFlags } = require('discord.js');
 const { getAutoLogChannel } = require('../config');
+const { addInfraction } = require('../utils/infractions');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -478,12 +479,33 @@ module.exports.handleSelectMenu = async (interaction) => {
       }
     }, 3000);
     
+    // Sicil: mute kaydı
+    try {
+      addInfraction(interaction.guild.id, targetUser.id, {
+        t: Date.now(),
+        type: 'mute',
+        reason: secenek.sebep,
+        executorId: interaction.user.id,
+        durationMin: secenek.sure
+      });
+    } catch {}
+
     // Belirtilen süre sonra rolü kaldırmak için timeout ayarla
     setTimeout(async () => {
       try {
         const stillMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
         if (stillMember && stillMember.roles.cache.has(muteRole.id)) {
           await stillMember.roles.remove(muteRole, 'Mute süresi doldu');
+          // Sicil: unmute kaydı (otomatik)
+          try {
+            addInfraction(interaction.guild.id, targetUser.id, {
+              t: Date.now(),
+              type: 'unmute',
+              reason: 'Süre doldu',
+              executorId: interaction.client.user.id,
+              durationMin: secenek.sure
+            });
+          } catch {}
           
           // Unmute log
           const logChannelId = getAutoLogChannel(interaction.guild.id);
