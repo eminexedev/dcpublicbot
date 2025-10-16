@@ -374,16 +374,28 @@ module.exports = {
   },
 
   async _renderPanel(interaction, guildId) {
-    const { embed, rows, files } = await composePanel(interaction.client, interaction.guild, interaction.member || null);
+    // Etkileşimi hemen onayla (3sn limitine takılmamak için)
+    try { await interaction.deferUpdate(); } catch {}
+    // Buton güncellemelerinde görseli yeniden üretmeye gerek yok (ağ/yük gecikmesini azalt)
+    const { embed, rows } = await composePanel(interaction.client, interaction.guild, interaction.member || null, { includeImage: false });
     try {
-      await interaction.update({ embeds: [embed], components: rows, files });
-    } catch {
-      await interaction.reply({ embeds: [embed], components: rows, files, ephemeral: true });
+      await interaction.editReply({ embeds: [embed], components: rows });
+    } catch (e1) {
+      // Yedek: orijinal mesajı doğrudan düzenlemeyi dene
+      try {
+        if (interaction.message && typeof interaction.message.edit === 'function') {
+          await interaction.message.edit({ embeds: [embed], components: rows });
+          return;
+        }
+      } catch (e2) {}
+      // Son çare: ephemeral followUp ile bilgi ver
+      try { await interaction.followUp({ content: '⚠️ Panel güncellenemedi. Lütfen tekrar deneyin.', ephemeral: true }); } catch {}
     }
   }
 };
 
-async function composePanel(client, guild, member) {
+async function composePanel(client, guild, member, options = {}) {
+  const includeImage = options.includeImage !== false;
   const cfg = getPrivateVoiceConfig(guild.id);
   const logId = getLogChannel(guild.id);
   const triggers = (cfg.triggerNames || []);
@@ -425,40 +437,42 @@ async function composePanel(client, guild, member) {
 
   const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
   const adminRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('pv:toggle').setLabel(cfg.enabled ? '⛔' : '🟢').setStyle(cfg.enabled ? ButtonStyle.Secondary : ButtonStyle.Success),
-    new ButtonBuilder().setCustomId('pv:autodelete').setLabel('🌀').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:refresh').setLabel('♻️').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId('pv:toggle').setLabel((cfg.enabled ? '⛔ Kapat' : '🟢 Aç')).setStyle(cfg.enabled ? ButtonStyle.Secondary : ButtonStyle.Success),
+    new ButtonBuilder().setCustomId('pv:autodelete').setLabel('🌀 Oto Sil').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:refresh').setLabel('♻️ Yenile').setStyle(ButtonStyle.Secondary)
   );
   const userRow1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('pv:u:rename').setLabel('📝').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:limit:down').setLabel('👥➖').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:limit:up').setLabel('👥➕').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:lock').setLabel('🛡️').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:unlock').setLabel('🔓').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId('pv:u:rename').setLabel('📝 Ad Değiştir').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:limit:down').setLabel('👥➖ Limit Azalt').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:limit:up').setLabel('👥➕ Limit Artır').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:lock').setLabel('🛡️ Kilitle').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:unlock').setLabel('🔓 Kilidi Aç').setStyle(ButtonStyle.Secondary)
   );
   const userRow2 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('pv:u:muteall').setLabel('🔇').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:unmuteall').setLabel('🔈').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:moveout').setLabel('↘️').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:delete').setLabel('🗑️').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId('pv:u:muteall').setLabel('🔇 Herkesi Sustur').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:unmuteall').setLabel('🔈 Herkesin Sesini Aç').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:moveout').setLabel('↘️ Herkesi At').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:delete').setLabel('🗑️ Sil').setStyle(ButtonStyle.Secondary)
   );
   const userRow3 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('pv:u:invite').setLabel('🔗').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:disconnect').setLabel('🔌').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:region').setLabel('🌐').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:claim').setLabel('👑').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('pv:u:transfer').setLabel('🔄').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId('pv:u:invite').setLabel('🔗 Davet').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:disconnect').setLabel('🔌 Kullanıcıyı Kopar').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:region').setLabel('🌐 Bölge').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:claim').setLabel('👑 Sahiplen').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('pv:u:transfer').setLabel('🔄 Devret').setStyle(ButtonStyle.Secondary)
   );
 
   // Kullanım kılavuzu görseli üret
   const files = [];
-  try {
-    const img = await renderGuideImage();
-    if (img) {
-      files.push({ attachment: img, name: 'pv_guide.png' });
-      embed.setImage('attachment://pv_guide.png');
-    }
-  } catch {}
+  if (includeImage) {
+    try {
+      const img = await renderGuideImage();
+      if (img) {
+        files.push({ attachment: img, name: 'pv_guide.png' });
+        embed.setImage('attachment://pv_guide.png');
+      }
+    } catch {}
+  }
 
   return { embed, rows: [adminRow, userRow1, userRow2, userRow3], files };
 }

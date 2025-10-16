@@ -168,7 +168,9 @@ module.exports = (client) => {
     try {
       const channel = oldState.channel;
       if (!channel) return;
-      if (!createdChannels.has(channel.id)) return; // Sadece bu oturumda oluşturulanlar
+      // Sadece bu oturumda oluşturulanlarla sınırlama yerine, kalıcı seti de kontrol et
+      const isManaged = createdChannels.has(channel.id) || client.privateVoice?.created?.has(channel.id);
+      if (!isManaged) return;
       if (channel.members.size > 0) return;
 
       const cfg = getPrivateVoiceConfig(oldState.guild.id);

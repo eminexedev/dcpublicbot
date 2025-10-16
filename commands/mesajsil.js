@@ -56,10 +56,45 @@ module.exports = {
     }
 
     try {
-      // Mesajları sil
-      const deleted = await channel.bulkDelete(sayi, true);
-      const successMsg = `✅ ${deleted.size} mesaj başarıyla silindi!`;
-      
+      // Yetki kontrolleri (kullanıcı ve bot)
+      const member = ctx.member || (ctx.message && ctx.message.member);
+      const me = guild.members.me;
+      if (!member?.permissions?.has(PermissionFlagsBits.ManageMessages)) {
+        const msg = '❌ Bu komutu kullanmak için Mesajları Yönet iznine ihtiyacınız var.';
+        return ctx.options ? reply({ content: msg, ephemeral: true }) : channel.send(msg).then(m=>setTimeout(()=>m.delete().catch(()=>{}),5000));
+      }
+      if (!channel.permissionsFor(me)?.has(PermissionFlagsBits.ManageMessages)) {
+        const msg = '❌ Botun bu kanalda Mesajları Yönet izni yok.';
+        return ctx.options ? reply({ content: msg, ephemeral: true }) : channel.send(msg).then(m=>setTimeout(()=>m.delete().catch(()=>{}),5000));
+      }
+
+      // Önce 14 günden genç mesajları toplu sil
+      let totalDeleted = 0;
+      const bulk = await channel.bulkDelete(sayi, true).catch(()=>null);
+      if (bulk) totalDeleted += bulk.size;
+
+      // Hedefe ulaşılamadıysa (eski mesajlar), tek tek silerek tamamlamayı dene
+      const remaining = Math.max(0, sayi - totalDeleted);
+      if (remaining > 0) {
+        let toDelete = remaining;
+        let beforeId = undefined;
+        while (toDelete > 0) {
+          const fetchCount = Math.min(100, toDelete);
+          const fetched = await channel.messages.fetch({ limit: fetchCount, before: beforeId }).catch(()=>null);
+          if (!fetched || fetched.size === 0) break;
+          // Başarı/uyarı mesajlarımızı yanlışlıkla silmemek için şimdilik sadece mevcut batch'i temizleyeceğiz; bu noktada halen başarı mesajı atılmadı.
+          for (const msg of fetched.values()) {
+            // Pinned mesajları atla
+            if (msg.pinned) continue;
+            try { await msg.delete(); totalDeleted++; toDelete--; } catch {}
+            if (toDelete <= 0) break;
+          }
+          beforeId = fetched.last()?.id;
+          if (!beforeId) break;
+        }
+      }
+
+      const successMsg = `✅ ${totalDeleted} mesaj başarıyla silindi!`;
       // Başarı mesajını gönder
       if (ctx.options) {
         await reply({ content: successMsg, ephemeral: true });
@@ -78,7 +113,7 @@ module.exports = {
           try {
             const logEmbed = new EmbedBuilder()
               .setTitle('🗑️ Mesaj Silindi')
-              .setDescription(`**${channel}** kanalında **${deleted.size}** mesaj silindi.`)
+              .setDescription(`**${channel}** kanalında **${totalDeleted}** mesaj silindi.`)
               .setColor(0xFF6B6B)
               .addFields([
                 {
@@ -93,7 +128,7 @@ module.exports = {
                 },
                 {
                   name: '🔢 Silinen Mesaj Sayısı',
-                  value: `${deleted.size}`,
+                  value: `${totalDeleted}`,
                   inline: true
                 }
               ])
@@ -107,7 +142,7 @@ module.exports = {
       }
     } catch (error) {
       console.error('Mesaj silme hatası:', error);
-      const errorMsg = `❌ Mesajlar silinirken bir hata oluştu: ${error.message}`;
+  const errorMsg = `❌ Mesajlar silinirken bir hata oluştu: ${error.message}`;
       
       if (ctx.options) {
         await reply({ content: errorMsg, ephemeral: true });
