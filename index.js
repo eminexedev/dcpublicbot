@@ -1,10 +1,8 @@
-// Discord botunun ana dosyası
 require('@dotenvx/dotenvx').config()
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
 const os = require('os');
 const DEBUG_SHUTDOWN = process.env.DEBUG_SHUTDOWN === '1';
-
-// Global log ayarları
+const IS_PM2 = !!(process.env.pm_id || process.env.PM2_HOME);
 const GLOBAL_LOG_CHANNEL_ID = '1427764280454807623';
 let __globalLogReady = false;
 let __globalLogQueue = [];
@@ -113,13 +111,11 @@ client.metrics = {
   modals: 0,
   errors: 0,
   commandUsage: {},
-  // Tepki süresi ölçümü için
   totalCommandCount: 0,
   totalCommandMs: 0,
   commandTimings: {}, // { [commandName]: { count: number, totalMs: number } }
 };
 
-// İstatistik kanalı güncelleme
 const { getStatsChannels } = require('./statsConfig');
 
 async function updateStatsChannels(guild) {
@@ -153,18 +149,15 @@ client.on('guildMemberRemove', member => updateStatsChannels(member.guild));
 client.once('clientReady', async () => {
   console.log('✅ Client ready event tetiklendi. Giriş yapan bot:', client.user?.tag);
   __globalLogReady = true;
-  // Global log kanalını önceden al ve cache'le
   try {
     __globalLogChannel = client.channels.cache.get(GLOBAL_LOG_CHANNEL_ID) || await client.channels.fetch(GLOBAL_LOG_CHANNEL_ID).catch(()=>null);
   } catch {}
-  // Kuyruktaki logları gönder
   if (__globalLogQueue.length) {
     for (const msg of __globalLogQueue.splice(0)) {
       await sendGlobalLog(client, msg);
     }
   }
   await sendGlobalLog(client, `✅ Bot hazır: ${client.user?.tag}`);
-  // Saatlik durum logları planla
   scheduleHourlyLogs(client);
   console.log('🔍 Aktif intentler:', client.options.intents.bitfield?.toString());
   const { getPrefix } = require('./config');
@@ -190,7 +183,6 @@ function scheduleHourlyLogs(client) {
       const load = os.loadavg?.() || [0,0,0];
       const cpus = os.cpus?.() || [];
       const cpuModel = cpus[0]?.model || 'n/a';
-      // Basit CPU kullanım yüzdesi tahmini (1 dakikalık loadavg / CPU sayısı)
       const cpuCount = Math.max(1, cpus.length || 1);
       const cpuPct = Math.min(100, Math.max(0, (load[0] / cpuCount) * 100)).toFixed(0);
       const m = client.metrics || { slash:0,prefix:0,buttons:0,selects:0,modals:0,errors:0 };
@@ -218,7 +210,6 @@ function scheduleHourlyLogs(client) {
         ]
       };
       await sendGlobalLog(client, { embeds: [embed] });
-      // Sayaçları saatlik sıfırla (kümülatif istiyorsan kaldırabiliriz)
       client.metrics.slash = 0;
       client.metrics.prefix = 0;
       client.metrics.buttons = 0;
@@ -443,11 +434,12 @@ process.on('unhandledRejection', async (reason, promise) => {
   }
 });
 
-// Kapanış / yeniden başlatma logları
+// Kapanış / yeniden başlatma 
 async function gracefulShutdown(signal) {
   if (__shuttingDown) return;
   __shuttingDown = true;
-  const msg = signal ? `🛑 Bot kapanıyor...` : '🛑 Bot discorddan düştü';
+  const src = IS_PM2 ? 'pm2' : (process.platform || 'node');
+  const msg = signal ? `🛑 Bot kapatılıyor...` : `🛑 Bağlantı düştü (${src})`;
   if (DEBUG_SHUTDOWN) console.log('[SHUTDOWN] Handler tetiklendi:', signal || 'NO-SIGNAL');
   // Önce kanalı refresh etmeyi dene (destroy öncesi)
   try {
@@ -477,6 +469,20 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGBREAK', () => gracefulShutdown('SIGBREAK'));
 // Bazı ortamlarda kapanış HUP ile gelebilir
 process.on('SIGHUP', () => gracefulShutdown('SIGHUP'));
+// Linux/PM2 için ek sinyaller
+process.on('SIGQUIT', () => gracefulShutdown('SIGQUIT'));
+process.on('SIGUSR1', () => gracefulShutdown('SIGUSR1'));
+process.on('SIGUSR2', () => gracefulShutdown('SIGUSR2'));
+// PM2 cluster/disconnect durumu
+process.on('disconnect', () => gracefulShutdown('DISCONNECT'));
+// PM2, bazı durumlarda IPC ile 'shutdown' mesajı gönderebilir
+process.on('message', (msg) => {
+  try {
+    if (msg === 'shutdown' || msg === 'pm2:kill' || (msg && typeof msg === 'object' && (msg.cmd === 'shutdown' || msg.type === 'shutdown'))) {
+      gracefulShutdown('PM2:SHUTDOWN');
+    }
+  } catch {}
+});
 process.on('beforeExit', async (code) => {
   try {
     await Promise.race([
@@ -486,6 +492,5 @@ process.on('beforeExit', async (code) => {
   } catch {}
 });
 process.on('exit', (code) => {
-  // Bu aşamada async işlemler güvenilir değildir; konsola yazmakla yetinelim.
   console.log(`[EXIT] code=${code}`);
 });
