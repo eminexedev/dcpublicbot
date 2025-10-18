@@ -389,6 +389,33 @@ module.exports = (client) => {
   // Universal Handler ile prefix komut sistemi
   client.on(Events.MessageCreate, async message => {
     if (message.author.bot || !message.guild) return;
+    // Bot mention'ına hızlı yanıt (bilgi embedi)
+    try {
+      const botId = client.user?.id;
+      if (botId) {
+        const trimmed = message.content.trim();
+        const justMention = new RegExp(`^<@!?${botId}>$`).test(trimmed);
+        if (justMention) {
+          const { getPrefix } = require('./config');
+          const px = getPrefix(message.guild.id) || '.';
+          // Küçük bir selam ve kılavuz
+          message.react('👋').catch(()=>{});
+          await message.reply({
+            embeds: [{
+              title: 'Merhaba! Ben buradayım 👋',
+              color: 0x5865F2,
+              description: `Komutları slash ile veya prefix ile kullanabilirsiniz.\n\n• Slash: "/" yazıp komut listesinden seçin\n• Prefix: \`${px}yardim\` gibi. Prefixi değiştirmek için: \`/prefix yeni:<yeniPrefix>\``,
+              fields: [
+                { name: 'Geçerli Prefix', value: `\`${px}\``, inline: true },
+                { name: 'Yardım', value: 'Slash: `/yardim`  |  Prefix: `${px}yardim`', inline: true }
+              ],
+            }],
+            allowedMentions: { repliedUser: false }
+          }).catch(()=>{});
+          return; // Mention mesajlarında komut arama yapma
+        }
+      }
+    } catch {}
     
     const prefix = getPrefix(message.guild.id) || '.';
     if (!message.content.startsWith(prefix)) return;

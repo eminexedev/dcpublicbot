@@ -75,6 +75,19 @@ function setAutoLogChannel(guildId, channelId) {
   fs.writeFileSync(autoLogConfigPath, JSON.stringify(data, null, 2));
 }
 
+function removeAutoLogChannel(guildId) {
+  let data = {};
+  if (fs.existsSync(autoLogConfigPath)) {
+    data = JSON.parse(fs.readFileSync(autoLogConfigPath, 'utf8'));
+  }
+  if (data[guildId]) {
+    delete data[guildId];
+    fs.writeFileSync(autoLogConfigPath, JSON.stringify(data, null, 2));
+    return true;
+  }
+  return false;
+}
+
 // ========================
 // INVITE CONFIG FUNCTIONS
 // ========================
@@ -489,6 +502,7 @@ module.exports = {
   // Auto Log Config
   getAutoLogChannel,
   setAutoLogChannel,
+  removeAutoLogChannel,
   
   // Invite Config
   getInviteLogChannel,

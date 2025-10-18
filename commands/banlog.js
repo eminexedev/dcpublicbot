@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { setAutoLogChannel, getAutoLogChannel, removeAutoLogChannel } = require('../autoLogConfig');
+const { setAutoLogChannel, getAutoLogChannel, removeAutoLogChannel } = require('../config');
 
 module.exports = {
   data: new SlashCommandBuilder()
