@@ -179,9 +179,11 @@ module.exports = {
         templateList = templateList.substring(0, 4000) + '...\n\n*Liste çok uzun olduğu için kısaltıldı*';
       }
 
+      const fieldValue = templateList || 'Şablon bulunamadı';
+      const safeFieldValue = fieldValue.length > 1024 ? (fieldValue.slice(0, 1000) + '... (kısaltıldı)') : fieldValue;
       listEmbed.addFields({
         name: '📋 Şablon Listesi',
-        value: templateList || 'Şablon bulunamadı',
+        value: safeFieldValue,
         inline: false
       });
 
