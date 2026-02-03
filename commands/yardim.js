@@ -117,7 +117,7 @@ function getModCommandsEmbed() {
 			},
 			{
 				name: '📋 Ban Yönetimi',
-				value: '`/banlog <#kanal>` - Ban loglarının gönderileceği kanalı ayarlar\n' +
+				value: '`/banlogkanal <#kanal>` - Ban loglarının gönderileceği kanalı ayarlar\n' +
 					   '`/banlogdurum` - Ban log sisteminin durumunu gösterir\n' +
 					   '`/banlogkanal` - Mevcut ban log kanalını gösterir\n' +
 					   '• Otomatik ban kayıtları ve bildirimler',

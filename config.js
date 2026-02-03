@@ -9,6 +9,7 @@ const prefixConfigPath = path.join(__dirname, 'prefixConfig.json');
 const jailConfigPath = path.join(__dirname, 'jailConfig.json');
 const privateVoiceConfigPath = path.join(__dirname, 'privateVoiceConfig.json');
 const welcomeConfigPath = path.join(__dirname, 'welcomeConfig.json');
+const profanityConfigPath = path.join(__dirname, 'profanityConfig.json');
 
 
 // Güvenlik konfigürasyon dosyaları
@@ -125,6 +126,33 @@ function setWelcomeChannel(guildId, channelId) {
   }
   data[guildId] = channelId;
   fs.writeFileSync(welcomeConfigPath, JSON.stringify(data, null, 2));
+}
+
+// ========================
+// PROFANITY FILTER CONFIG
+// ========================
+
+function getProfanityChannels(guildId) {
+  const all = readJsonSafe(profanityConfigPath);
+  const list = all[guildId] || [];
+  return Array.isArray(list) ? list : [];
+}
+
+function addProfanityChannel(guildId, channelId) {
+  const all = readJsonSafe(profanityConfigPath);
+  const set = new Set(all[guildId] || []);
+  set.add(channelId);
+  all[guildId] = Array.from(set);
+  writeJsonSafe(profanityConfigPath, all);
+  return all[guildId];
+}
+
+function removeProfanityChannel(guildId, channelId) {
+  const all = readJsonSafe(profanityConfigPath);
+  const arr = Array.isArray(all[guildId]) ? all[guildId] : [];
+  all[guildId] = arr.filter(id => id !== channelId);
+  writeJsonSafe(profanityConfigPath, all);
+  return all[guildId];
 }
 
 // ========================
@@ -529,6 +557,9 @@ module.exports = {
   setInviteLogChannel,
   getWelcomeChannel,
   setWelcomeChannel,
+  getProfanityChannels,
+  addProfanityChannel,
+  removeProfanityChannel,
   
   // Jail Config
   getJailRole,

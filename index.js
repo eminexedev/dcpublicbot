@@ -314,6 +314,8 @@ require('./events/securityProtection')(client);
 
 // Özel oda (private voice) sistemi
 require('./events/privateVoice')(client);
+// Küfür engel sistemi
+require('./events/profanityFilter')(client);
 
 // Bot'u başlat
 async function startBot() {

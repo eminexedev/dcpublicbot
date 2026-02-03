@@ -27,12 +27,15 @@ module.exports = {
   usage: '.istatistikkanal <tip> <kanal_türü>',
   permissions: [PermissionFlagsBits.Administrator],
 
-  async execute(interaction) {
-    const tip = interaction.options.getString('tip');
-    const kanalTuru = interaction.options.getString('kanalturu');
+  async execute(ctx, args) {
+    let isSlash = false;
+    try { if (typeof ctx.isChatInputCommand === 'function' && ctx.isChatInputCommand()) isSlash = true; } catch {}
+    try { if (typeof ctx.isCommand === 'function' && ctx.isCommand()) isSlash = true; } catch {}
+    const tip = isSlash ? ctx.options.getString('tip') : (args && args[0] ? String(args[0]).toLowerCase() : null);
+    const kanalTuru = isSlash ? ctx.options.getString('kanalturu') : (args && args[1] ? String(args[1]).toLowerCase() : null);
 
     if (!['uye','aktif'].includes(tip) || !['text','voice'].includes(kanalTuru)) {
-      return interaction.reply({ 
+      return ctx.reply({ 
         content: 'Geçerli tip (uye/aktif) ve kanal türü (text/voice) belirtmelisin.', 
         ephemeral: true 
       });
@@ -41,28 +44,28 @@ module.exports = {
     try {
       let channel;
       if (kanalTuru === 'text') {
-        channel = await interaction.guild.channels.create({
+        channel = await ctx.guild.channels.create({
           name: tip === 'uye' ? 'üye-sayısı-0' : 'aktif-kullanıcı-0',
           type: ChannelType.GuildText,
           reason: 'İstatistik kanalı oluşturuldu.'
         });
       } else if (kanalTuru === 'voice') {
-        channel = await interaction.guild.channels.create({
+        channel = await ctx.guild.channels.create({
           name: tip === 'uye' ? 'Üye: 0' : 'Aktif: 0',
           type: ChannelType.GuildVoice,
           reason: 'İstatistik kanalı oluşturuldu.'
         });
       }
 
-      setStatsChannel(interaction.guild.id, tip, channel.id);
+      setStatsChannel(ctx.guild.id, tip, channel.id);
       
-      await interaction.reply({ 
+      await ctx.reply({ 
         content: `✅ Başarıyla yeni kanal oluşturuldu: ${channel} (${tip === 'uye' ? 'Üye Sayısı' : 'Aktif Kullanıcı'})`,
         ephemeral: false
       });
     } catch (error) {
       console.error('İstatistik kanalı oluşturma hatası:', error);
-      await interaction.reply({
+      await ctx.reply({
         content: '❌ Kanal oluşturulurken hata oluştu.',
         ephemeral: true
       });
