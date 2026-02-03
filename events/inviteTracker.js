@@ -24,15 +24,13 @@ async function handleMemberJoin(member) {
   const logChannel = guild.channels.cache.get(logChannelId);
   if (!logChannel) return;
 
-  // Eski ve yeni davetleri karşılaştır
   const oldInvites = invitesCache.get(guild.id);
-  const newInvites = await guild.invites.fetch().catch(() => null);
+  let newInvites = await guild.invites.fetch().catch(() => null);
   if (!oldInvites || !newInvites) {
-    logChannel.send({ content: `• ${member} (\`${member.id}\`) sunucuya katıldı!\nDavet Eden: Bilinmiyor (ilk cache veya hata)` });
     if (newInvites) invitesCache.set(guild.id, newInvites);
+    logChannel.send({ content: `• ${member} (\`${member.id}\`) sunucuya katıldı!\nDavet Eden: Bilinmiyor` });
     return;
   }
-  invitesCache.set(guild.id, newInvites);
 
   let usedInvite = null;
   for (const [code, invite] of newInvites) {
@@ -43,7 +41,6 @@ async function handleMemberJoin(member) {
     }
   }
 
-
   if (!usedInvite) {
     for (const [code, oldInvite] of oldInvites) {
       if (!newInvites.has(code)) {
@@ -53,6 +50,31 @@ async function handleMemberJoin(member) {
     }
   }
 
+  if (!usedInvite) {
+    await new Promise(res => setTimeout(res, 1200));
+    const newerInvites = await guild.invites.fetch().catch(() => null);
+    if (newerInvites) {
+      newInvites = newerInvites;
+      for (const [code, invite] of newerInvites) {
+        const old = oldInvites.get(code);
+        if (old && invite.uses > old.uses) {
+          usedInvite = invite;
+          break;
+        }
+      }
+      if (!usedInvite) {
+        for (const [code, oldInvite] of oldInvites) {
+          if (!newerInvites.has(code)) {
+            usedInvite = oldInvite;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Cache'i en son güncelle (eski snapshot ile karşılaştırmayı etkilenmeden yapabilmek için)
+  if (newInvites) invitesCache.set(guild.id, newInvites);
 
   const isVanity = guild.vanityURLCode ? true : false;
   // Hesap oluşturulma tarihi
@@ -97,7 +119,8 @@ async function handleMemberLeave(member) {
 }
 
 function setupInviteTracking(client) {
-  client.on('clientReady', () => {
+  // Bot hazır olduğunda tüm guild'lerin davetlerini cache'le
+  client.once('ready', () => {
     client.guilds.cache.forEach(guild => cacheGuildInvites(guild));
   });
   client.on('guildCreate', (guild) => {

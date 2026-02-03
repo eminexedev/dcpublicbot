@@ -146,7 +146,7 @@ async function updateStatsChannels(guild) {
 
 client.on('guildMemberAdd', member => updateStatsChannels(member.guild));
 client.on('guildMemberRemove', member => updateStatsChannels(member.guild));
-client.once('clientReady', async () => {
+client.once('ready', async () => {
   console.log('✅ Client ready event tetiklendi. Giriş yapan bot:', client.user?.tag);
   __globalLogReady = true;
   try {
@@ -286,8 +286,12 @@ async function deployCommands() {
   }).setToken(process.env.TOKEN);
   try {
     console.log('Slash komutları Discord\'a yükleniyor...');
+    const appId = (client.application && client.application.id) || (client.user && client.user.id) || process.env.CLIENT_ID;
+    if (!appId) {
+      throw new Error('CLIENT_ID bulunamadı; client.application.id hazır değil ve .env CLIENT_ID ayarlı değil.');
+    }
     await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
+      Routes.applicationCommands(appId),
       { body: commands },
     );
     console.log(`✅ ${commands.length} slash komutu başarıyla yüklendi!`);

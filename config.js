@@ -8,6 +8,7 @@ const inviteConfigPath = path.join(__dirname, 'inviteConfig.json');
 const prefixConfigPath = path.join(__dirname, 'prefixConfig.json');
 const jailConfigPath = path.join(__dirname, 'jailConfig.json');
 const privateVoiceConfigPath = path.join(__dirname, 'privateVoiceConfig.json');
+const welcomeConfigPath = path.join(__dirname, 'welcomeConfig.json');
 
 
 // Güvenlik konfigürasyon dosyaları
@@ -105,6 +106,25 @@ function setInviteLogChannel(guildId, channelId) {
   }
   data[guildId] = channelId;
   fs.writeFileSync(inviteConfigPath, JSON.stringify(data, null, 2));
+}
+
+// ========================
+// WELCOME IMAGE CONFIG
+// ========================
+
+function getWelcomeChannel(guildId) {
+  if (!fs.existsSync(welcomeConfigPath)) return null;
+  const data = JSON.parse(fs.readFileSync(welcomeConfigPath, 'utf8'));
+  return data[guildId] || null;
+}
+
+function setWelcomeChannel(guildId, channelId) {
+  let data = {};
+  if (fs.existsSync(welcomeConfigPath)) {
+    data = JSON.parse(fs.readFileSync(welcomeConfigPath, 'utf8'));
+  }
+  data[guildId] = channelId;
+  fs.writeFileSync(welcomeConfigPath, JSON.stringify(data, null, 2));
 }
 
 // ========================
@@ -507,6 +527,8 @@ module.exports = {
   // Invite Config
   getInviteLogChannel,
   setInviteLogChannel,
+  getWelcomeChannel,
+  setWelcomeChannel,
   
   // Jail Config
   getJailRole,

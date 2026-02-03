@@ -1,6 +1,7 @@
 const { Events, AttachmentBuilder } = require('discord.js');
 const { createWelcomeImage } = require('./welcomeImage');
 const { getRegistrationConfig } = require('../registrationConfig');
+const { getWelcomeChannel } = require('../config');
 
 // Hoş geldin
 async function onMemberJoin(member) {
@@ -34,8 +35,9 @@ async function onMemberJoin(member) {
   }
 
   // Hoş geldin mesajı
-  const channel = member.guild.systemChannel;
-  if (!channel) return;
+  const welcomeChannelId = getWelcomeChannel(member.guild.id);
+  const channel = welcomeChannelId ? member.guild.channels.cache.get(welcomeChannelId) : member.guild.systemChannel;
+  if (!channel || channel.type !== 0) return;
   const buffer = await createWelcomeImage(member.user.tag, member.guild.memberCount, member.user.displayAvatarURL({ extension: 'png' }), 'giris');
   const attachment = new AttachmentBuilder(buffer, { name: 'hosgeldin.png' });
   channel.send({ content: `Hoş geldin, ${member}!`, files: [attachment] });
@@ -43,8 +45,9 @@ async function onMemberJoin(member) {
 
 // Güle güle
 async function onMemberLeave(member) {
-  const channel = member.guild.systemChannel;
-  if (!channel) return;
+  const welcomeChannelId = getWelcomeChannel(member.guild.id);
+  const channel = welcomeChannelId ? member.guild.channels.cache.get(welcomeChannelId) : member.guild.systemChannel;
+  if (!channel || channel.type !== 0) return;
   const buffer = await createWelcomeImage(member.user.tag, member.guild.memberCount, member.user.displayAvatarURL({ extension: 'png' }), 'cikis');
   const attachment = new AttachmentBuilder(buffer, { name: 'gulegule.png' });
   channel.send({ content: `${member.user.tag} sunucudan ayrıldı.`, files: [attachment] });
