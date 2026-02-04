@@ -2,8 +2,18 @@ const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js')
 const fs = require('fs');
 const path = require('path');
 
+
 const statsPath = path.join(__dirname, '../statsData.json');
 
+// Günlük ve haftalık veri okuma yardımcı fonksiyonu
+function getPeriodStats(stats, userId, type, period) {
+	// type: 'users' (mesaj), 'voiceUsers' (ses)
+	// period: 'daily', 'weekly'
+	if (!stats || !stats[`${type}_${period}`]) return 0;
+	return stats[`${type}_${period}`][userId] || 0;
+}
+
+// Günlük ve haftalık veri okuma yardımcıları
 function loadStats(guildId) {
 	if (!fs.existsSync(statsPath)) return null;
 	const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
@@ -279,6 +289,16 @@ module.exports = {
 		} 
 		// Eğer kullanıcı bazlı veri yoksa, genel ses verilerinden tahmin et
 		else if (stats.voiceChannels) {
+					function formatVoice(val) {
+						return val ? formatTime(val) : 'Veri yok';
+					}
+
+					function getPeriodStats(stats, userId, type, period) {
+						// type: 'users' (mesaj), 'voiceUsers' (ses)
+						// period: 'daily', 'weekly'
+						if (!stats || !stats[`${type}_${period}`]) return 0;
+						return stats[`${type}_${period}`][userId] || 0;
+					}
 			// Sunucudaki tüm ses kanallarını gez
 			const totalServerVoice = Object.values(stats.voiceChannels).reduce((a, b) => a + b, 0);
 			
@@ -377,6 +397,12 @@ module.exports = {
 			return val.length <= 1024 ? val : (val.slice(0, 1000) + '...');
 		};
 
+		// Günlük ve haftalık veriler
+		const dailyMsg = getPeriodStats(stats, targetUser.id, 'users', 'daily');
+		const weeklyMsg = getPeriodStats(stats, targetUser.id, 'users', 'weekly');
+		const dailyVoice = getPeriodStats(stats, targetUser.id, 'voiceUsers', 'daily');
+		const weeklyVoice = getPeriodStats(stats, targetUser.id, 'voiceUsers', 'weekly');
+
 		const totalVoiceDisplay = formatTime(userVoiceSec + liveSessionExtra);
 		const embed = new EmbedBuilder()
 			.setAuthor({ name: `${username} (${targetUser.id}) üyesinin istatistikleri`, iconURL: avatarURL })
@@ -394,6 +420,10 @@ module.exports = {
 					value: messageChannelsList
 				},
 				{
+					name: 'Günlük/Haftalık Mesaj',
+					value: `Günlük: **${dailyMsg}**\nHaftalık: **${weeklyMsg}**`
+				},
+				{
 					name: 'Ses Bilgileri',
 					value: safeField(
 						`Toplam Ses: **${totalVoiceDisplay}**${liveSessionExtra ? ' *(canlı)*' : ''}\n` +
@@ -406,10 +436,14 @@ module.exports = {
 					value: voiceChannelsList
 				},
 				{
+					name: 'Günlük/Haftalık Ses',
+					value: `Günlük: **${formatTime(dailyVoice)}**\nHaftalık: **${formatTime(weeklyVoice)}**`
+				},
+				{
 					name: 'AFK Bilgileri',
 					value: safeField(`${afkChannelName} (AFK)\nAFK Süresi: ${userAfkSec ? formatTime(userAfkSec) : 'Veri yok'}`)
 				}
-			)
+			);
 
 		await reply({ embeds: [embed] });
 	}
