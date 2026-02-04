@@ -398,10 +398,10 @@ module.exports = {
 		};
 
 		// Günlük ve haftalık veriler
-		const dailyMsg = getPeriodStats(stats, targetUser.id, 'users', 'daily');
-		const weeklyMsg = getPeriodStats(stats, targetUser.id, 'users', 'weekly');
-		const dailyVoice = getPeriodStats(stats, targetUser.id, 'voiceUsers', 'daily');
-		const weeklyVoice = getPeriodStats(stats, targetUser.id, 'voiceUsers', 'weekly');
+		const dailyMsg = stats.users_daily?.[targetUser.id] || 0;
+		const weeklyMsg = stats.users_weekly?.[targetUser.id] || 0;
+		const dailyVoice = stats.voiceUsers_daily?.[targetUser.id] || 0;
+		const weeklyVoice = stats.voiceUsers_weekly?.[targetUser.id] || 0;
 
 		const totalVoiceDisplay = formatTime(userVoiceSec + liveSessionExtra);
 		const embed = new EmbedBuilder()
