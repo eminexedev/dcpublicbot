@@ -545,6 +545,11 @@ module.exports = {
         });
       }
       
+      // İşlem süresi 3 saniyeyi aşabileceği için yanıtı önceden ayır
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ ephemeral: true });
+      }
+      
       // Kayıt config'ini al
       const registrationConfig = getRegistrationConfig(interaction.guild.id);
       
@@ -660,8 +665,8 @@ module.exports = {
         })
         .setTimestamp();
       
-      // İlk olarak ephemeral response
-      await interaction.reply({ 
+      // İlk olarak ephemeral response (defer sonrası edit)
+      await interaction.editReply({ 
         embeds: [successEmbed],
         ephemeral: true
       });
