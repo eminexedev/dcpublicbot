@@ -163,6 +163,14 @@ client.once('ready', async () => {
   const { getPrefix } = require('./config');
   require('./events/ready')(client, getPrefix);
 
+  // İzin sistemi scheduler'ını başlat
+  const { startLeaveScheduler } = require('./events/leaveScheduler');
+  startLeaveScheduler(client);
+
+  // İzin sistemi buton handler'ını başlat
+  const { setupLeaveButtonHandler } = require('./events/leaveButtonHandler');
+  setupLeaveButtonHandler(client);
+
   client.guilds.cache.forEach(guild => updateStatsChannels(guild));
   await deployCommands();
 });
@@ -500,3 +508,5 @@ process.on('beforeExit', async (code) => {
 process.on('exit', (code) => {
   console.log(`[EXIT] code=${code}`);
 });
+
+ 

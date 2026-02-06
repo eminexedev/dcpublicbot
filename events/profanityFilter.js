@@ -6,13 +6,13 @@ const UPPER_RE = new RegExp(`[${TURKISH_UPPER}]`, 'g');
 
 // Basit küfür listesi (TR) - ihtiyaca göre genişletilebilir
 const BAD_WORDS = [
-  'amcık', 'amcıklama', 'amcığa', 'amcıksın', 'amık', 'amına', 'amınakoyayım', 'amınakoyim', 'amın feryadı',
+  'am','amcık', 'amcıklama', 'amcığa', 'amcıksın', 'amık', 'amına', 'amınakoyayım', 'amınakoyim', 'amın feryadı',
   'sik', 'sikik', 'sikiş', 'siktir', 'siktirgit', 'sokuk', 'sokayım', 'sokuyum', 'sikiym', 'sikem',
   'yarrak', 'yarak', 'yarağım', 'taşşak', 'daşşak', 'taşak', 'taşşaklarını', 
   'göt', 'götoş', 'götlek', 'götveren', 'götün', 'götüne','orospu', 'orospu çocuğu', 'oç', 'o.ç', 'kahpe', 'kahbe', 'yavşak','yavsak', 'puşt', 'gavat', 'kavat',
   'godoş', 'pezevenk', 'pezo', 'piç', 'ibne', 'ipne', 'top', 'dalyarak', 'am feryadı',
   'am biti', 'sik kırıntısı', 'sülalesini', 'ecdadını', 'bacısını', 'karısını','fuck', 'fucker', 'motherfucker', 'bitch', 'shit', 'asshole', 'dick', 'pussy', 'bastard', 
-  'cunt', 'slut', 'whore', 'faggot', 'dickhead','aq', 'amk','am', 'amg', 'amq', 'götün', 'siktim', 'siktigim', 'soktuğum', 'soktugum'
+  'cunt', 'slut', 'whore', 'faggot', 'dickhead','aq', 'amk', 'amg', 'amq', 'götün', 'siktim', 'siktigim', 'soktuğum', 'soktugum'
 ];
 const BAD_WORDS_RE = new RegExp(`\\b(${BAD_WORDS.map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')})\\b`, 'i');
 
@@ -31,11 +31,12 @@ function tokenize(ascii) {
 function buildSeparatedRegex(word) {
   const letters = normalizeText(word).split('');
   const sep = '[^a-z0-9]{0,3}';
-  const pattern = letters.map(ch => ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join(sep);
+  const core = letters.map(ch => ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join(sep);
+  const pattern = `(^|[^a-z0-9])(${core})([^a-z0-9]|$)`;
   return new RegExp(pattern, 'i');
 }
 const SHORT_EXACT = new Set(['amk','aq','oç','oc','sik','piç','pic','bok','göt','got','ibne','ipne','amq','amg']);
-const BAD_FLEX = BAD_WORDS.map(w => buildSeparatedRegex(w));
+const BAD_FLEX = BAD_WORDS.filter(w => normalizeText(w).length >= 3).map(w => buildSeparatedRegex(w));
 
 function isExcessiveUppercase(text) {
   if (!text) return false;
@@ -56,23 +57,33 @@ function isExcessiveUppercase(text) {
 
 function containsBadWord(text) {
   if (!text) return false;
+  const original = text.normalize('NFC');
   // 1) Doğrudan eşleşme (sınırlarla)
-  if (BAD_WORDS_RE.test(text.normalize('NFC'))) return true;
-  // 2) Normalize edip token bazlı kontrol
+  const directHit = BAD_WORDS_RE.test(original);
+  // 2) Normalize edip token bazlı kontrol ve skorlayıcı
   const ascii = normalizeText(text);
   const tokens = tokenize(ascii);
+  const allowList = new Set(['selam','selamlar','selamunaleykum','selamun','aleykumselam','tamam','imam','hamam','program','kelam']);
+  let score = 0;
+  let reasons = [];
+  if (directHit) { score += 3; reasons.push('direct'); }
   for (const t of tokens) {
-    if (SHORT_EXACT.has(t)) return true;
+    if (allowList.has(t)) continue;
+    if (SHORT_EXACT.has(t)) { score += 2; reasons.push(`short:${t}`); }
     for (const base of BAD_WORDS) {
       const b = normalizeText(base);
-      if (b.length >= 4 && t.includes(b)) return true;
+      if (b.length >= 4 && t === b) { score += 3; reasons.push(`exact:${b}`); }
     }
   }
-  // 3) Ayrılmış/obfuske yazımlar (s.i.k, s-i-k, boşluklu)
+  // 3) Ayrılmış/obfuske yazımlar (s.i.k, s-i-k, boşluklu) - sadece kelime sınırlarında
   for (const re of BAD_FLEX) {
-    if (re.test(ascii)) return true;
+    if (re.test(ascii)) { score += 2; reasons.push('flex'); break; }
   }
-  return false;
+  // 4) Uzatmalar ve tekrarlar
+  if (/[a-z]{3,}\1{2,}/i.test(ascii)) { score += 1; reasons.push('repeat'); }
+  // 5) Küfür kompozisyonları
+  if (ascii.includes('orospu') && ascii.includes('cocuk')) { score += 2; reasons.push('phrase'); }
+  return score >= 2;
 }
 
 module.exports = (client) => {

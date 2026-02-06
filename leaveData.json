@@ -1,0 +1,24 @@
+{
+  "1417228003250798603": {
+    "1387877139352911952": {
+      "status": "active",
+      "userId": "1387877139352911952",
+      "username": "testpcaccount.",
+      "userTag": "testpcaccount.",
+      "reason": "31",
+      "days": 13,
+      "requestDate": 1770412159548,
+      "endDate": 1771535359548,
+      "rolesToRemove": [
+        "1468011047460933724"
+      ],
+      "leaveRoleId": "1469418983118606346",
+      "requestId": "1387877139352911952-1770412159548",
+      "createdAt": 1770412168595,
+      "startDate": 1770412168090,
+      "approvedBy": "1386063084530962534",
+      "approvedByTag": "kawashidev",
+      "approvedAt": 1770412168090
+    }
+  }
+}

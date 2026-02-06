@@ -10,6 +10,8 @@ const jailConfigPath = path.join(__dirname, 'jailConfig.json');
 const privateVoiceConfigPath = path.join(__dirname, 'privateVoiceConfig.json');
 const welcomeConfigPath = path.join(__dirname, 'welcomeConfig.json');
 const profanityConfigPath = path.join(__dirname, 'profanityConfig.json');
+const leaveConfigPath = path.join(__dirname, 'leaveConfig.json');
+const leaveDataPath = path.join(__dirname, 'leaveData.json');
 
 
 // Güvenlik konfigürasyon dosyaları
@@ -538,6 +540,104 @@ function getAllConfigStatus(guildId) {
 // EXPORTS
 // ========================
 
+// ========================
+// LEAVE (İZİN) CONFIG FUNCTIONS
+// ========================
+
+function getLeaveConfig(guildId) {
+  const all = readJsonSafe(leaveConfigPath);
+  return all[guildId] || null;
+}
+
+function setLeaveAuthorizedRole(guildId, roleId, roleName) {
+  const all = readJsonSafe(leaveConfigPath);
+  if (!all[guildId]) all[guildId] = {};
+  if (!all[guildId].authorizedRoles) all[guildId].authorizedRoles = [];
+  
+  // Aynı rol zaten ekliyse ekleme
+  if (!all[guildId].authorizedRoles.find(r => r.id === roleId)) {
+    all[guildId].authorizedRoles.push({ id: roleId, name: roleName });
+  }
+  writeJsonSafe(leaveConfigPath, all);
+  return all[guildId].authorizedRoles;
+}
+
+function removeLeaveAuthorizedRole(guildId, roleId) {
+  const all = readJsonSafe(leaveConfigPath);
+  if (!all[guildId] || !all[guildId].authorizedRoles) return [];
+  all[guildId].authorizedRoles = all[guildId].authorizedRoles.filter(r => r.id !== roleId);
+  writeJsonSafe(leaveConfigPath, all);
+  return all[guildId].authorizedRoles;
+}
+
+function getLeaveAuthorizedRoles(guildId) {
+  const all = readJsonSafe(leaveConfigPath);
+  return all[guildId]?.authorizedRoles || [];
+}
+
+function setLeaveRole(guildId, roleId, roleName) {
+  const all = readJsonSafe(leaveConfigPath);
+  if (!all[guildId]) all[guildId] = {};
+  all[guildId].leaveRoleId = roleId;
+  all[guildId].leaveRoleName = roleName;
+  writeJsonSafe(leaveConfigPath, all);
+  return all[guildId];
+}
+
+function getLeaveRole(guildId) {
+  const all = readJsonSafe(leaveConfigPath);
+  return all[guildId]?.leaveRoleId || null;
+}
+
+function setLeaveLogChannel(guildId, channelId) {
+  const all = readJsonSafe(leaveConfigPath);
+  if (!all[guildId]) all[guildId] = {};
+  all[guildId].logChannelId = channelId;
+  writeJsonSafe(leaveConfigPath, all);
+  return all[guildId];
+}
+
+function getLeaveLogChannel(guildId) {
+  const all = readJsonSafe(leaveConfigPath);
+  return all[guildId]?.logChannelId || null;
+}
+
+// İzin verisi işlemleri (aktif izinler)
+function addLeaveRequest(guildId, userId, data) {
+  const all = readJsonSafe(leaveDataPath);
+  if (!all[guildId]) all[guildId] = {};
+  all[guildId][userId] = {
+    ...data,
+    createdAt: Date.now()
+  };
+  writeJsonSafe(leaveDataPath, all);
+  return all[guildId][userId];
+}
+
+function getLeaveRequest(guildId, userId) {
+  const all = readJsonSafe(leaveDataPath);
+  return all[guildId]?.[userId] || null;
+}
+
+function getAllActiveLeaves(guildId) {
+  const all = readJsonSafe(leaveDataPath);
+  return all[guildId] || {};
+}
+
+function getAllLeavesGlobal() {
+  return readJsonSafe(leaveDataPath);
+}
+
+function removeLeaveRequest(guildId, userId) {
+  const all = readJsonSafe(leaveDataPath);
+  if (all[guildId] && all[guildId][userId]) {
+    delete all[guildId][userId];
+    writeJsonSafe(leaveDataPath, all);
+    return true;
+  }
+  return false;
+}
+
 module.exports = {
   // Ban Config
   getBanLogChannel,
@@ -571,6 +671,21 @@ module.exports = {
   getUnjailLogChannel,
   setJailLogChannel,
   setUnjailLogChannel,
+  
+  // Leave (İzin) Config
+  getLeaveConfig,
+  setLeaveAuthorizedRole,
+  removeLeaveAuthorizedRole,
+  getLeaveAuthorizedRoles,
+  setLeaveRole,
+  getLeaveRole,
+  setLeaveLogChannel,
+  getLeaveLogChannel,
+  addLeaveRequest,
+  getLeaveRequest,
+  getAllActiveLeaves,
+  getAllLeavesGlobal,
+  removeLeaveRequest,
   
   // Utility Functions
   findAnyLogChannel,
