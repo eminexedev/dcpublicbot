@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
-const { setLogChannel, setMaleRole, setFemaleRole, setMemberRole, setUnregisteredRole, getRegistrationConfig, resetRegistrationConfig } = require('../registrationConfig');
+const { setLogChannel, setMaleRole, setFemaleRole, setMemberRole, setUnregisteredRole, setUnregisteredLogChannel, setRegistrationConfig, addAuthorizedRole, getRegistrationConfig, resetRegistrationConfig } = require('../registrationConfig');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -11,6 +11,21 @@ module.exports = {
         .addChannelOption(option =>
           option.setName('kanal').setDescription('Log kanalı').setRequired(true)
             .addChannelTypes(ChannelType.GuildText)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand.setName('kayıtsız-log-kanal')
+        .setDescription('Kayıtsız log kanalını ayarlar')
+        .addChannelOption(option =>
+          option.setName('kanal').setDescription('Log kanalı').setRequired(true)
+            .addChannelTypes(ChannelType.GuildText)
+        )
+    )
+    .addSubcommand(subcommand =>
+      subcommand.setName('kayıt-yetkilirol')
+        .setDescription('Kayıt yetkilisi rolü ekler')
+        .addRoleOption(option =>
+          option.setName('rol').setDescription('Yetkili rolü').setRequired(true)
         )
     )
     .addSubcommand(subcommand =>
@@ -94,6 +109,12 @@ module.exports = {
         case 'kayıtsız-rol':
           await this.handleUnregisteredRole(ctx, args);
           break;
+        case 'kayıtsız-log-kanal':
+          await this.handleUnregisteredLogChannel(ctx, args);
+          break;
+        case 'kayıt-yetkilirol':
+          await this.handleAuthorizedRole(ctx, args);
+          break;
         case 'durum':
           await this.handleStatus(ctx, args);
           break;
@@ -175,6 +196,88 @@ module.exports = {
         content: '❌ Log kanalı ayarlanırken bir hata oluştu.',
         ephemeral: true
       });
+    }
+  },
+  
+  async handleUnregisteredLogChannel(ctx, args) {
+    let channel;
+    if (ctx.isCommand && ctx.isCommand()) {
+      channel = ctx.options.getChannel('kanal');
+    } else {
+      const channelArg = args[1];
+      if (!channelArg) {
+        return ctx.reply({ content: '❌ Bir kanal etiketlemelisin. Örnek: `!kayıt-ayar kayıtsız-log-kanal #genel`', ephemeral: true });
+      }
+      const channelMatch = channelArg.match(/^<#(\d+)>$|^(\d+)$/);
+      if (!channelMatch) {
+        return ctx.reply({ content: '❌ Geçerli bir kanal etiketlemelisin.', ephemeral: true });
+      }
+      const channelId = channelMatch[1] || channelMatch[2];
+      channel = ctx.guild.channels.cache.get(channelId);
+      if (!channel) {
+        return ctx.reply({ content: '❌ Kanal bulunamadı.', ephemeral: true });
+      }
+    }
+    if (channel.type !== ChannelType.GuildText) {
+      return ctx.reply({ content: '❌ Sadece metin kanalları seçilebilir.', ephemeral: true });
+    }
+    const result = (typeof setUnregisteredLogChannel === 'function')
+      ? setUnregisteredLogChannel(ctx.guild.id, channel.id)
+      : setRegistrationConfig(ctx.guild.id, { unregisteredLogChannelId: channel.id });
+    if (result) {
+      const embed = new EmbedBuilder()
+        .setColor('#57F287')
+        .setTitle('✅ Kayıtsız Log Kanalı Ayarlandı')
+        .setDescription(`Kayıtsız log kanalı ${channel} olarak ayarlandı.`)
+        .addFields({
+          name: '📊 Yapılandırma Durumu',
+          value: result.isConfigured ? '✅ Tamamlandı' : '⚠️ Diğer ayarlar eksik',
+          inline: true
+        })
+        .setTimestamp();
+      await ctx.reply({ embeds: [embed], ephemeral: true });
+    } else {
+      await ctx.reply({ content: '❌ Log kanalı ayarlanırken bir hata oluştu.', ephemeral: true });
+    }
+  },
+  
+  async handleAuthorizedRole(ctx, args) {
+    let role;
+    if (ctx.isCommand && ctx.isCommand()) {
+      role = ctx.options.getRole('rol');
+    } else {
+      const roleArg = args[1];
+      if (!roleArg) {
+        return ctx.reply({ content: '❌ Bir rol etiketlemelisin. Örnek: `!kayıt-ayar kayıt-yetkilirol @yetkili`', ephemeral: true });
+      }
+      const match = roleArg.match(/^<@&(\d+)>$|^(\d+)$/);
+      if (!match) {
+        return ctx.reply({ content: '❌ Geçerli bir rol etiketlemelisin.', ephemeral: true });
+      }
+      const roleId = match[1] || match[2];
+      role = ctx.guild.roles.cache.get(roleId);
+      if (!role) {
+        return ctx.reply({ content: '❌ Rol bulunamadı.', ephemeral: true });
+      }
+    }
+    const result = (typeof addAuthorizedRole === 'function') 
+      ? addAuthorizedRole(ctx.guild.id, role.id)
+      : setRegistrationConfig(ctx.guild.id, { authorizedRoleIds: [role.id] });
+    if (result) {
+      const list = Array.isArray(result.authorizedRoleIds) ? result.authorizedRoleIds : [];
+      const names = list.map(id => {
+        const r = ctx.guild.roles.cache.get(id);
+        return r ? `${r}` : `\`${id}\``;
+      }).join(', ');
+      const embed = new EmbedBuilder()
+        .setColor('#57F287')
+        .setTitle('✅ Kayıt Yetkilisi Rol Eklendi')
+        .setDescription(`Yetkili rolü ${role} eklendi.`)
+        .addFields({ name: '📋 Yetkili Rol Listesi', value: names || '—', inline: false })
+        .setTimestamp();
+      await ctx.reply({ embeds: [embed], ephemeral: true });
+    } else {
+      await ctx.reply({ content: '❌ Rol eklenirken bir hata oluştu.', ephemeral: true });
     }
   },
 

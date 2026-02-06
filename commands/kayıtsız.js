@@ -40,8 +40,16 @@ module.exports = {
       if (!targetId) return reply(`❌ Geçerli bir kullanıcı belirtmelisin. Örnek: \`(prefix)kayıtsız @Üye\` veya \`(prefix)kayıtsız 123456789012345678\``);
     }
 
-    if (!memberInvoker.permissions.has(PermissionFlagsBits.ManageRoles)) {
-      return reply('❌ Bu işlemi yapmak için "Rolleri Yönet" iznine sahip olmalısın.');
+    const regConf = getRegistrationConfig(guild.id);
+    const authRoles = Array.isArray(regConf.authorizedRoleIds) ? regConf.authorizedRoleIds : [];
+    let allowed = false;
+    if (authRoles.length > 0) {
+      allowed = memberInvoker.roles.cache.some(r => authRoles.includes(r.id));
+    } else {
+      allowed = memberInvoker.permissions.has(PermissionFlagsBits.ManageRoles);
+    }
+    if (!allowed) {
+      return reply('❌ Bu işlemi yapmak için kayıt yetkili rolüne sahip olmalısın.');
     }
 
     const reg = getRegistrationConfig(guild.id);
@@ -101,6 +109,26 @@ module.exports = {
         )
         .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true }))
         .setTimestamp();
+
+      const logChannelId = reg.unregisteredLogChannelId || reg.logChannelId;
+      if (logChannelId) {
+        const logChannel = guild.channels.cache.get(logChannelId);
+        if (logChannel) {
+          const logEmbed = new EmbedBuilder()
+            .setColor('#5865F2')
+            .setTitle('Kayıtsız Üye İşlemi')
+            .addFields(
+              { name: '👮‍♂️ Yetkili', value: `${author}`, inline: true },
+              { name: '👤 Üye', value: `${targetMember}`, inline: true },
+              { name: '🏷️ Yeni İsim', value: targetMember.displayName || 'Kayıtsız', inline: true },
+              { name: '🎭 Verilen Rol', value: `${unregisteredRole.name} (${unregisteredRole.id})`, inline: true },
+              { name: '🗑️ Kaldırılan Roller', value: `${removableRoles.size} rol`, inline: true },
+              { name: '📊 Toplam Üye', value: `${guild.memberCount}`, inline: true }
+            )
+            .setTimestamp();
+          await logChannel.send({ embeds: [logEmbed] }).catch(()=>{});
+        }
+      }
 
       if (isSlash) {
         return ctx.reply({ embeds: [embed], ephemeral: true });

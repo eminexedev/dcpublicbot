@@ -1,0 +1,28 @@
+{
+  "1417228003250798603": {
+    "totalRegistrations": 2,
+    "maleRegistrations": 2,
+    "femaleRegistrations": 0,
+    "registrarStats": {
+      "1386063084530962534": 1,
+      "535177312468205596": 1
+    },
+    "registeredMembers": [
+      {
+        "userId": "1387877139352911952",
+        "userName": "emin",
+        "gender": "erkek",
+        "registrarId": "1386063084530962534",
+        "timestamp": 1770237712420
+      },
+      {
+        "userId": "397435850977312790",
+        "userName": "Emir",
+        "gender": "erkek",
+        "registrarId": "535177312468205596",
+        "timestamp": 1770241507525
+      }
+    ],
+    "lastUpdated": 1770241507525
+  }
+}

@@ -31,14 +31,21 @@ function saveRegistrationConfig(config) {
 // Sunucu için kayıt config'ini al
 function getRegistrationConfig(guildId) {
   const config = loadRegistrationConfig();
-  return config[guildId] || {
+  const base = config[guildId] || {
     logChannelId: null,
+    registrationLogChannelId: null,
+    unregisteredLogChannelId: null,
     maleRoleId: null,
     femaleRoleId: null,
     memberRoleId: null,
     unregisteredRoleId: null,
+    authorizedRoleIds: [],
     isConfigured: false
   };
+  if (!base.registrationLogChannelId && base.logChannelId) {
+    base.registrationLogChannelId = base.logChannelId;
+  }
+  return base;
 }
 
 // Sunucu için kayıt config'ini ayarla
@@ -46,11 +53,14 @@ function setRegistrationConfig(guildId, settings) {
   const config = loadRegistrationConfig();
   
   if (!config[guildId]) {
-    config[guildId] = {};
+    config[guildId] = { authorizedRoleIds: [] };
   }
   
   // Mevcut ayarları güncelle
   Object.assign(config[guildId], settings);
+  if (settings.authorizedRoleIds && !Array.isArray(settings.authorizedRoleIds)) {
+    config[guildId].authorizedRoleIds = [String(settings.authorizedRoleIds)];
+  }
   
   // Config tamamlanma durumunu kontrol et
   config[guildId].isConfigured = !!(
@@ -67,7 +77,7 @@ function setRegistrationConfig(guildId, settings) {
 
 // Log kanalını ayarla
 function setLogChannel(guildId, channelId) {
-  return setRegistrationConfig(guildId, { logChannelId: channelId });
+  return setRegistrationConfig(guildId, { logChannelId: channelId, registrationLogChannelId: channelId });
 }
 
 // Erkek rolünü ayarla
@@ -88,6 +98,23 @@ function setMemberRole(guildId, roleId) {
 // Kayıtsız rolünü ayarla
 function setUnregisteredRole(guildId, roleId) {
   return setRegistrationConfig(guildId, { unregisteredRoleId: roleId });
+}
+
+function setUnregisteredLogChannel(guildId, channelId) {
+  return setRegistrationConfig(guildId, { unregisteredLogChannelId: channelId });
+}
+
+function addAuthorizedRole(guildId, roleId) {
+  const current = getRegistrationConfig(guildId);
+  const list = Array.isArray(current.authorizedRoleIds) ? current.authorizedRoleIds.slice() : [];
+  const roleIdStr = String(roleId);
+  if (!list.includes(roleIdStr)) list.push(roleIdStr);
+  return setRegistrationConfig(guildId, { authorizedRoleIds: list });
+}
+
+function setAuthorizedRoles(guildId, roleIds) {
+  const normalized = Array.isArray(roleIds) ? roleIds.map(id => String(id)) : [String(roleIds)];
+  return setRegistrationConfig(guildId, { authorizedRoleIds: normalized });
 }
 
 // Kayıt sisteminin yapılandırılıp yapılandırılmadığını kontrol et
@@ -114,6 +141,9 @@ module.exports = {
   setFemaleRole,
   setMemberRole,
   setUnregisteredRole,
+  setUnregisteredLogChannel,
+  addAuthorizedRole,
+  setAuthorizedRoles,
   isRegistrationConfigured,
   resetRegistrationConfig
 };

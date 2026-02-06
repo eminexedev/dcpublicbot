@@ -46,12 +46,17 @@ module.exports = {
         .addFields(
           {
             name: '📋 Gerekli Ayarlar',
-            value: '• Log kanalı\n• Erkek rolü\n• Kadın rolü\n• Üye rolü',
+            value: '• Kayıt log kanalı\n• Kayıtsız log kanalı (opsiyonel)\n• Erkek rolü\n• Kadın rolü\n• Üye rolü\n• Kayıtsız rolü',
             inline: false
           },
           {
             name: '🛠️ Yapılandırma',
-            value: '`/kayıt-ayar durum` - Mevcut durum\n`/kayıt-ayar log-kanal` - Log kanalı ayarla\n`/kayıt-ayar erkek-rol` - Erkek rolü ayarla\n`/kayıt-ayar kadın-rol` - Kadın rolü ayarla\n`/kayıt-ayar üye-rol` - Üye rolü ayarla\n`/kayıt-ayar kayıtsız-rol` - Kayıtsız rolü ayarla',
+            value: '`/kayıt-ayar durum` — Mevcut durum\n`/kayıt-ayar log-kanal` — Kayıt log kanalı\n`/kayıt-ayar kayıtsız-log-kanal` — Kayıtsız log kanalı\n`/kayıt-ayar erkek-rol` — Erkek rolü\n`/kayıt-ayar kadın-rol` — Kadın rolü\n`/kayıt-ayar üye-rol` — Üye rolü\n`/kayıt-ayar kayıtsız-rol` — Kayıtsız rolü\n`/kayıt-ayar kayıt-yetkilirol` — Kayıt yetkilisi rolü ekle',
+            inline: false
+          },
+          {
+            name: '⚙️ Komutlar',
+            value: '`/kayıt kullanıcı:<@üye>` — Üye kayıt\n`/kayıtsız uye:<@üye>` veya `kayıtsız @üye` — Kayıtsız yap',
             inline: false
           }
         )
@@ -74,7 +79,7 @@ module.exports = {
       // Prefix komut
       if (!args[0]) {
         return ctx.reply({
-          content: '❌ Bir kullanıcı etiketlemelisin. Örnek: `!kayıt @kullanıcı`',
+          content: `❌ Bir kullanıcı etiketlemelisin. Örnek: \`${ctx.prefix}kayıt @kullanıcı\``,
           flags: MessageFlags.Ephemeral
         });
       }
@@ -138,9 +143,17 @@ module.exports = {
       });
     }
     const executor = await ctx.guild.members.fetch(executorId);
-    if (!executor.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    const regConf = getRegistrationConfig(ctx.guild.id);
+    const authRoles = Array.isArray(regConf.authorizedRoleIds) ? regConf.authorizedRoleIds : [];
+    let allowed = false;
+    if (authRoles.length > 0) {
+      allowed = executor.roles.cache.some(r => authRoles.includes(r.id));
+    } else {
+      allowed = executor.permissions.has(PermissionFlagsBits.ManageRoles);
+    }
+    if (!allowed) {
       return ctx.reply({
-        content: '❌ **YETKİSİZ ERİŞİM!** Bu komutu kullanmak için "Rolleri Yönet" yetkisine sahip olmalısın.',
+        content: '❌ **YETKİSİZ ERİŞİM!** Bu komutu kullanmak için yetkili rolüne sahip olmalısın.',
         flags: MessageFlags.Ephemeral
       });
     }
@@ -701,13 +714,13 @@ module.exports = {
       });
       
       // Auto log - Kayıt config'indeki log kanalını kullan
-      const registrationLogChannelId = registrationConfig.logChannelId;
+      const registrationLogChannelId = registrationConfig.registrationLogChannelId || registrationConfig.logChannelId;
       if (registrationLogChannelId) {
         const logChannel = interaction.guild.channels.cache.get(registrationLogChannelId);
         if (logChannel) {
           const logEmbed = new EmbedBuilder()
             .setColor('#5865F2')
-            .setTitle('👤 Yeni Üye Kayıt')
+            .setTitle('👤 Yeni Üye Kayıt Edildi')
             .addFields(
               { name: '�‍♂️ Kayıt Bilgileri', value: `**Yetkili:** ${interaction.user.tag} (\`${interaction.user.id}\`)\n**Üye:** ${targetUser.tag} (\`${targetUser.id}\`)`, inline: false },
               { name: `${genderEmoji} Cinsiyet`, value: genderText, inline: true },
